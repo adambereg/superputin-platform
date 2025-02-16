@@ -4,10 +4,11 @@ import { config } from './config/config';
 import { DatabaseService } from './database/DatabaseService';
 import { AuthService } from './auth/AuthService';
 import { UserModel } from './models/User';
-import { upload, handleMulterError } from './middleware/upload';
+import { upload, handleMulterError, determineContentType } from './middleware/upload';
 import { StorageService } from './storage/StorageService';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import { Content, ContentType, ContentModel, ILike } from './models/Content';
 
 async function startServer() {
   try {
@@ -392,6 +393,281 @@ async function startServer() {
         });
       } catch (error: any) {
         console.error('Ошибка при удалении аватара:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Добавляем функцию для нормализации пути
+    function normalizeUrl(path: string): string {
+      return path.replace(/\\/g, '/');
+    }
+
+    // Обновляем роут создания контента
+    app.post('/api/content', 
+      express.urlencoded({ extended: true }), // Парсим form-data
+      upload.single('image'), // Загружаем файл
+      async (req: Request, res: Response): Promise<void> => {
+      try {
+        console.log('Получен запрос на создание контента:', {
+          body: req.body,
+          file: req.file
+        });
+
+        const { title, description, type, creator, tags } = req.body;
+
+        // Проверяем обязательные поля
+        if (!title || !type || !creator) {
+          res.status(400).json({ 
+            error: 'Необходимо указать title, type и creator' 
+          });
+          return;
+        }
+
+        // Проверяем тип контента
+        if (!Object.values(ContentType).includes(type)) {
+          res.status(400).json({ 
+            error: 'Неверный тип контента. Допустимые значения: meme, comic' 
+          });
+          return;
+        }
+
+        // Проверяем наличие файла
+        if (!req.file) {
+          res.status(400).json({ error: 'Необходимо загрузить изображение' });
+          return;
+        }
+
+        // Проверяем существование пользователя
+        const user = await UserModel.findById(creator);
+        if (!user) {
+          res.status(404).json({ error: 'Пользователь не найден' });
+          return;
+        }
+
+        // Формируем URL изображения
+        const imageUrl = `http://localhost:3000/${normalizeUrl(req.file.path)}`;
+
+        // Создаем новый контент
+        const content = new Content({
+          title,
+          description,
+          type,
+          imageUrl,
+          creator,
+          likes: [],
+          likesCount: 0,
+          tags: tags ? JSON.parse(tags) : []
+        });
+
+        await content.save();
+
+        console.log('Контент успешно создан');
+
+        res.json({
+          message: 'Контент успешно создан',
+          content: {
+            title: content.title,
+            description: content.description,
+            type: content.type,
+            imageUrl: content.imageUrl,
+            creator: content.creator,
+            tags: content.tags,
+            likes: content.likes
+          }
+        });
+      } catch (error: any) {
+        console.error('Ошибка при создании контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Обновляем роут получения контента
+    app.get('/api/content', async (req: Request, res: Response): Promise<void> => {
+      try {
+        console.log('Получен запрос на получение контента');
+        
+        const { type } = req.query;
+        const filter = type ? { type } : {};
+        
+        // Получаем записи с фильтром
+        const content = await ContentModel.find(filter)
+          .populate('creator', 'username email')
+          .sort({ createdAt: -1 });
+        
+        res.json({ content });
+      } catch (error: any) {
+        console.error('Ошибка при получении контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Добавляем роут для получения конкретного контента по ID
+    app.get('/api/content/:id', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        console.log('Получен запрос на получение контента по ID:', id);
+        
+        const content = await ContentModel.findById(id)
+          .populate('creator', 'username email');
+        
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+        
+        res.json({ content });
+      } catch (error: any) {
+        console.error('Ошибка при получении контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Добавляем роут для исправления путей в базе данных
+    app.post('/api/admin/fix-paths', async (_req: Request, res: Response): Promise<void> => {
+      try {
+        console.log('Начало исправления путей...');
+        
+        // Получаем весь контент
+        const content = await ContentModel.find();
+        
+        // Исправляем пути
+        for (const item of content) {
+          // Нормализуем URL
+          const normalizedUrl = normalizeUrl(item.imageUrl);
+          
+          // Исправляем папку (если это комикс в папке memes)
+          let fixedUrl = normalizedUrl;
+          if (item.type === 'comic' && normalizedUrl.includes('/uploads/memes/')) {
+            fixedUrl = normalizedUrl.replace('/uploads/memes/', '/uploads/comics/');
+            
+            // Перемещаем файл
+            const oldPath = normalizedUrl.replace('http://localhost:3000/', '');
+            const newPath = fixedUrl.replace('http://localhost:3000/', '');
+            
+            if (fs.existsSync(oldPath)) {
+              // Создаем папку comics если её нет
+              if (!fs.existsSync('uploads/comics')) {
+                fs.mkdirSync('uploads/comics', { recursive: true });
+              }
+              
+              fs.renameSync(oldPath, newPath);
+              console.log(`Файл перемещен: ${oldPath} -> ${newPath}`);
+            }
+          }
+          
+          // Обновляем запись в базе
+          if (fixedUrl !== item.imageUrl) {
+            await ContentModel.findByIdAndUpdate(item.id, { 
+              $set: { imageUrl: fixedUrl } 
+            });
+            console.log(`Обновлен путь для ${item.id}: ${fixedUrl}`);
+          }
+        }
+        
+        res.json({ 
+          message: 'Пути успешно исправлены',
+          count: content.length
+        });
+      } catch (error: any) {
+        console.error('Ошибка при исправлении путей:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Обновляем роут для лайка контента
+    app.post('/api/content/:id/like', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        const { userId } = req.body;
+
+        console.log('Добавление лайка:', { contentId: id, userId });
+
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(id);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем, не лайкнул ли уже пользователь
+        const hasLike = content.likes?.some(like => like.toString() === userId);
+        if (hasLike) {
+          res.status(400).json({ error: 'Вы уже поставили лайк' });
+          return;
+        }
+
+        // Добавляем лайк
+        const updatedContent = await ContentModel.findByIdAndUpdate(
+          id,
+          { 
+            $addToSet: { likes: userId },
+            $inc: { likesCount: 1 }
+          },
+          { new: true }
+        ).populate('creator', 'username email');
+
+        console.log('Контент обновлен:', updatedContent);
+
+        res.json({
+          message: 'Лайк успешно добавлен',
+          content: updatedContent
+        });
+      } catch (error: any) {
+        console.error('Ошибка при добавлении лайка:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Обновляем роут для удаления лайка
+    app.delete('/api/content/:id/like', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        const { userId } = req.body;
+
+        console.log('Удаление лайка:', { contentId: id, userId });
+
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(id);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем, есть ли лайк от пользователя
+        const hasLike = content.likes?.some(like => like.toString() === userId);
+        if (!hasLike) {
+          res.status(400).json({ error: 'Лайк не найден' });
+          return;
+        }
+
+        // Удаляем лайк
+        const updatedContent = await ContentModel.findByIdAndUpdate(
+          id,
+          { 
+            $pull: { likes: userId },
+            $inc: { likesCount: -1 }
+          },
+          { new: true }
+        ).populate('creator', 'username email');
+
+        console.log('Контент обновлен:', updatedContent);
+
+        res.json({
+          message: 'Лайк успешно удален',
+          content: updatedContent
+        });
+      } catch (error: any) {
+        console.error('Ошибка при удалении лайка:', error);
         res.status(500).json({ error: error.message });
       }
     });

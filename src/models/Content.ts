@@ -5,13 +5,20 @@ export enum ContentType {
   COMIC = 'comic'
 }
 
+// Добавляем интерфейс для лайков
+export interface ILike {
+  user: string; // ID пользователя
+  createdAt: Date;
+}
+
 export interface IContent {
   title: string;
   description?: string;
   type: ContentType;
   imageUrl: string;
-  creator: string; // ID пользователя
-  likes?: number;
+  creator: string;
+  likes: mongoose.Types.ObjectId[]; // Меняем тип на ObjectId[]
+  likesCount: number;
   tags?: string[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -39,7 +46,11 @@ const ContentSchema = new Schema({
     ref: 'User',
     required: true 
   },
-  likes: { 
+  likes: [{ 
+    type: Schema.Types.ObjectId, 
+    ref: 'User'
+  }],
+  likesCount: { 
     type: Number, 
     default: 0 
   },
@@ -58,7 +69,8 @@ export class Content implements IContent {
   type: ContentType;
   imageUrl: string;
   creator: string;
-  likes?: number;
+  likes: mongoose.Types.ObjectId[] = []; // Инициализируем пустым массивом
+  likesCount: number = 0;
   tags?: string[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -69,7 +81,8 @@ export class Content implements IContent {
     this.type = data.type;
     this.imageUrl = data.imageUrl;
     this.creator = data.creator;
-    this.likes = data.likes || 0;
+    this.likes = data.likes || [];
+    this.likesCount = data.likesCount || 0;
     this.tags = data.tags || [];
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
@@ -83,6 +96,7 @@ export class Content implements IContent {
       imageUrl: this.imageUrl,
       creator: this.creator,
       likes: this.likes,
+      likesCount: this.likesCount,
       tags: this.tags
     };
 
