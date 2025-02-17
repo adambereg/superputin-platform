@@ -481,20 +481,97 @@ async function startServer() {
       }
     });
 
-    // Роут для получения контента
+    // Роут для получения контента с пагинацией
     app.get('/api/content', async (req: Request, res: Response): Promise<void> => {
       try {
-        console.log('Получен запрос на получение контента');
+        console.log('Получен запрос на получение контента:', req.query);
         
-        const { type } = req.query;
-        const filter = type ? { type } : {};
+        const { 
+          type,
+          page = '1',
+          limit = '10',
+          sortBy = 'createdAt',
+          sortOrder = 'desc',
+          search = '',        // Поиск по заголовку и описанию
+          tags = '',          // Фильтрация по тегам
+          createdBy = ''      // Фильтрация по создателю
+        } = req.query;
+
+        // Преобразуем параметры
+        const pageNumber = parseInt(page as string, 10);
+        const limitNumber = parseInt(limit as string, 10);
+        const skip = (pageNumber - 1) * limitNumber;
+
+        // Формируем условия фильтрации
+        const filter: any = {};
         
-        // Получаем записи с фильтром
+        if (type) {
+          filter.type = type;
+        }
+
+        // Добавляем поиск по заголовку и описанию
+        if (search) {
+          filter.$or = [
+            { title: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } }
+          ];
+        }
+
+        // Добавляем фильтрацию по тегам
+        if (tags) {
+          const tagArray = (tags as string).split(',').map(tag => tag.trim().toLowerCase());
+          filter.tags = { $in: tagArray };
+        }
+
+        // Добавляем фильтрацию по создателю
+        if (createdBy) {
+          filter.creator = createdBy;
+        }
+
+        // Формируем сортировку
+        const sort: { [key: string]: 'asc' | 'desc' } = {
+          [sortBy as string]: sortOrder as 'asc' | 'desc'
+        };
+
+        // Получаем общее количество записей
+        const total = await ContentModel.countDocuments(filter);
+
+        // Получаем записи с пагинацией
         const content = await ContentModel.find(filter)
           .populate('creator', 'username email')
-          .sort({ createdAt: -1 });
-        
-        res.json({ content });
+          .sort(sort)
+          .skip(skip)
+          .limit(limitNumber);
+
+        // Вычисляем мета-информацию
+        const totalPages = Math.ceil(total / limitNumber);
+        const hasNextPage = pageNumber < totalPages;
+        const hasPrevPage = pageNumber > 1;
+
+        console.log(`Найдено ${content.length} элементов из ${total}`);
+
+        res.json({
+          message: 'Контент успешно получен',
+          content,
+          pagination: {
+            total,
+            totalPages,
+            currentPage: pageNumber,
+            perPage: limitNumber,
+            hasNextPage,
+            hasPrevPage,
+            nextPage: hasNextPage ? pageNumber + 1 : null,
+            prevPage: hasPrevPage ? pageNumber - 1 : null
+          },
+          filter: {
+            type: type || 'all',
+            search: search || null,
+            tags: tags || null,
+            createdBy: createdBy || null,
+            sortBy,
+            sortOrder
+          }
+        });
       } catch (error: any) {
         console.error('Ошибка при получении контента:', error);
         res.status(500).json({ error: error.message });
