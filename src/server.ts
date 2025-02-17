@@ -1015,6 +1015,61 @@ async function startServer() {
       }
     });
 
+    // Роут для удаления контента
+    app.delete('/api/content/:id', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        const { userId } = req.body;
+
+        console.log('Удаление контента:', { contentId: id, userId });
+
+        // Проверяем обязательные поля
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(id);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем права на удаление (создатель или админ)
+        if (content.creator.toString() !== userId) {
+          const user = await UserModel.findById(userId);
+          if (!user || user.role !== 'admin') {
+            res.status(403).json({ error: 'Нет прав на удаление контента' });
+            return;
+          }
+        }
+
+        // Удаляем файл изображения
+        const imagePath = content.imageUrl.replace(`http://${config.server.host}:${config.server.port}/`, '');
+        if (fs.existsSync(imagePath)) {
+          fs.unlinkSync(imagePath);
+          console.log('Файл изображения удален:', imagePath);
+        }
+
+        // Удаляем все комментарии к контенту
+        await CommentModel.deleteMany({ contentId: id });
+        console.log('Комментарии удалены');
+
+        // Удаляем сам контент
+        await ContentModel.findByIdAndDelete(id);
+        console.log('Контент удален');
+
+        res.json({
+          message: 'Контент успешно удален',
+          contentId: id
+        });
+      } catch (error: any) {
+        console.error('Ошибка при удалении контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Тестовый роут
     app.get('/api/test', (_req: Request, res: Response) => {
       res.json({ message: 'API работает' });
