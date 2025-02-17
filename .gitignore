@@ -1,6 +1,9 @@
-﻿node_modules/
+node_modules/
 dist/
+.env
+.env.local
+.env.production
 uploads/*
 !uploads/.gitkeep
-.env
 *.log
+.DS_Store
