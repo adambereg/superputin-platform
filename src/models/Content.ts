@@ -19,7 +19,7 @@ export interface IContent {
   creator: string;
   likes: mongoose.Types.ObjectId[]; // Меняем тип на ObjectId[]
   likesCount: number;
-  tags?: string[];
+  tags: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -55,11 +55,16 @@ const ContentSchema = new Schema({
     default: 0 
   },
   tags: [{ 
-    type: String 
+    type: String,
+    lowercase: true,
+    trim: true
   }]
 }, {
   timestamps: true
 });
+
+// Добавляем индекс для быстрого поиска по тегам
+ContentSchema.index({ tags: 1 });
 
 export const ContentModel = mongoose.model<IContent & Document>('Content', ContentSchema);
 
@@ -71,7 +76,7 @@ export class Content implements IContent {
   creator: string;
   likes: mongoose.Types.ObjectId[] = []; // Инициализируем пустым массивом
   likesCount: number = 0;
-  tags?: string[];
+  tags: string[];
   createdAt?: Date;
   updatedAt?: Date;
 

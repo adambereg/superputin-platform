@@ -404,22 +404,19 @@ async function startServer() {
     }
 
     // Обновляем роут создания контента
-    app.post('/api/content', 
-      express.urlencoded({ extended: true }), // Парсим form-data
-      upload.single('image'), // Загружаем файл
-      async (req: Request, res: Response): Promise<void> => {
+    app.post('/api/content', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
       try {
         console.log('Получен запрос на создание контента:', {
           body: req.body,
           file: req.file
         });
 
-        const { title, description, type, creator, tags } = req.body;
+        const { title, description, type, tags, userId } = req.body;
 
         // Проверяем обязательные поля
-        if (!title || !type || !creator) {
+        if (!title || !type || !userId) {
           res.status(400).json({ 
-            error: 'Необходимо указать title, type и creator' 
+            error: 'Необходимо указать title, type и userId' 
           });
           return;
         }
@@ -439,25 +436,27 @@ async function startServer() {
         }
 
         // Проверяем существование пользователя
-        const user = await UserModel.findById(creator);
+        const user = await UserModel.findById(userId);
         if (!user) {
           res.status(404).json({ error: 'Пользователь не найден' });
           return;
         }
 
-        // Формируем URL изображения
-        const imageUrl = `http://localhost:3000/${normalizeUrl(req.file.path)}`;
+        // Обрабатываем теги
+        const processedTags = tags ? 
+          (tags as string).split(',').map(tag => tag.trim().toLowerCase()) : 
+          [];
 
-        // Создаем новый контент
+        // Создаем контент
         const content = new Content({
           title,
           description,
           type,
-          imageUrl,
-          creator,
+          imageUrl: `http://${config.server.host}:${config.server.port}/uploads/${req.file.filename}`,
+          creator: userId,
+          tags: processedTags,
           likes: [],
-          likesCount: 0,
-          tags: tags ? JSON.parse(tags) : []
+          likesCount: 0
         });
 
         await content.save();
@@ -482,7 +481,7 @@ async function startServer() {
       }
     });
 
-    // Обновляем роут получения контента
+    // Роут для получения контента
     app.get('/api/content', async (req: Request, res: Response): Promise<void> => {
       try {
         console.log('Получен запрос на получение контента');
@@ -502,7 +501,44 @@ async function startServer() {
       }
     });
 
-    // Добавляем роут для получения конкретного контента по ID
+    // Роут для поиска контента по тегам (должен быть перед /api/content/:id)
+    app.get('/api/content/search', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { tags, type } = req.query;
+        console.log('Поиск контента:', { tags, type });
+
+        // Формируем условия поиска
+        const conditions: any = {};
+        
+        // Добавляем фильтр по тегам
+        if (tags) {
+          const tagArray = (tags as string).split(',').map(tag => tag.trim().toLowerCase());
+          conditions.tags = { $in: tagArray };
+        }
+        
+        // Добавляем фильтр по типу
+        if (type) {
+          conditions.type = type;
+        }
+
+        // Получаем контент с фильтрацией
+        const content = await ContentModel.find(conditions)
+          .populate('creator', 'username email')
+          .sort({ createdAt: -1 });
+
+        console.log(`Найдено ${content.length} элементов`);
+
+        res.json({
+          message: 'Поиск выполнен успешно',
+          content
+        });
+      } catch (error: any) {
+        console.error('Ошибка при поиске контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Остальные роуты для /api/content/:id
     app.get('/api/content/:id', async (req: Request, res: Response): Promise<void> => {
       try {
         const { id } = req.params;
@@ -959,6 +995,22 @@ async function startServer() {
         });
       } catch (error: any) {
         console.error('Ошибка при удалении лайка:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для получения всех уникальных тегов
+    app.get('/api/tags', async (_req: Request, res: Response): Promise<void> => {
+      try {
+        const tags = await ContentModel.distinct('tags');
+        console.log('Получено тегов:', tags.length);
+
+        res.json({
+          message: 'Теги успешно получены',
+          tags
+        });
+      } catch (error: any) {
+        console.error('Ошибка при получении тегов:', error);
         res.status(500).json({ error: error.message });
       }
     });
