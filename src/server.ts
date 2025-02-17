@@ -1070,6 +1070,82 @@ async function startServer() {
       }
     });
 
+    // Роут для редактирования контента
+    app.put('/api/content/:id', upload.single('file'), async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id } = req.params;
+        const { title, description, tags, userId } = req.body;
+
+        console.log('Редактирование контента:', { 
+          contentId: id, 
+          userId,
+          updates: { title, description, tags },
+          file: req.file
+        });
+
+        // Проверяем обязательные поля
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(id);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем права на редактирование
+        if (content.creator.toString() !== userId) {
+          const user = await UserModel.findById(userId);
+          if (!user || user.role !== 'admin') {
+            res.status(403).json({ error: 'Нет прав на редактирование контента' });
+            return;
+          }
+        }
+
+        // Подготавливаем данные для обновления
+        const updateData: any = {};
+        
+        if (title) updateData.title = title;
+        if (description) updateData.description = description;
+        if (tags) {
+          updateData.tags = tags.split(',').map((tag: string) => tag.trim().toLowerCase());
+        }
+
+        // Если загружен новый файл
+        if (req.file) {
+          // Удаляем старый файл
+          const oldImagePath = content.imageUrl.replace(`http://${config.server.host}:${config.server.port}/`, '');
+          if (fs.existsSync(oldImagePath)) {
+            fs.unlinkSync(oldImagePath);
+            console.log('Старый файл удален:', oldImagePath);
+          }
+
+          // Добавляем новый URL изображения
+          updateData.imageUrl = `http://${config.server.host}:${config.server.port}/uploads/${req.file.filename}`;
+        }
+
+        // Обновляем контент
+        const updatedContent = await ContentModel.findByIdAndUpdate(
+          id,
+          { $set: updateData },
+          { new: true }
+        ).populate('creator', 'username email');
+
+        console.log('Контент успешно обновлен:', updatedContent);
+
+        res.json({
+          message: 'Контент успешно обновлен',
+          content: updatedContent
+        });
+      } catch (error: any) {
+        console.error('Ошибка при редактировании контента:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // Тестовый роут
     app.get('/api/test', (_req: Request, res: Response) => {
       res.json({ message: 'API работает' });
