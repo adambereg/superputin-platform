@@ -9,6 +9,7 @@ import { StorageService } from './storage/StorageService';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import { Content, ContentType, ContentModel, ILike } from './models/Content';
+import { Comment, CommentModel } from './models/Comment';
 
 async function startServer() {
   try {
@@ -665,6 +666,296 @@ async function startServer() {
         res.json({
           message: 'Лайк успешно удален',
           content: updatedContent
+        });
+      } catch (error: any) {
+        console.error('Ошибка при удалении лайка:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для получения комментариев
+    app.get('/api/content/:id/comments', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id: contentId } = req.params;
+        console.log('Получение комментариев для контента:', contentId);
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(contentId);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Получаем комментарии с данными авторов
+        const comments = await CommentModel.find({ contentId })
+          .populate('author', 'username email avatarUrl')
+          .sort({ createdAt: -1 });
+
+        console.log(`Найдено ${comments.length} комментариев`);
+
+        res.json({
+          message: 'Комментарии успешно получены',
+          comments
+        });
+      } catch (error: any) {
+        console.error('Ошибка при получении комментариев:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для создания комментария
+    app.post('/api/content/:id/comments', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { id: contentId } = req.params;
+        const { content, userId } = req.body;
+
+        console.log('Создание комментария:', { contentId, content, userId });
+
+        // Проверяем обязательные поля
+        if (!content || !userId) {
+          res.status(400).json({ error: 'Необходимо указать content и userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const contentExists = await ContentModel.findById(contentId);
+        if (!contentExists) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем существование пользователя
+        const userExists = await UserModel.findById(userId);
+        if (!userExists) {
+          res.status(404).json({ error: 'Пользователь не найден' });
+          return;
+        }
+
+        // Создаем комментарий
+        const comment = new Comment({
+          content,
+          author: userId,
+          contentId,
+          likes: [],
+          likesCount: 0
+        });
+
+        await comment.save();
+
+        // Получаем сохраненный комментарий с данными автора
+        const savedComment = await CommentModel.findById(comment.id)
+          .populate('author', 'username email avatarUrl');
+
+        console.log('Комментарий успешно создан:', savedComment);
+
+        res.json({
+          message: 'Комментарий успешно создан',
+          comment: savedComment
+        });
+      } catch (error: any) {
+        console.error('Ошибка при создании комментария:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для удаления комментария
+    app.delete('/api/content/:contentId/comments/:commentId', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { contentId, commentId } = req.params;
+        const { userId } = req.body;
+
+        console.log('Удаление комментария:', { contentId, commentId, userId });
+
+        // Проверяем обязательные поля
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const content = await ContentModel.findById(contentId);
+        if (!content) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем существование комментария
+        const comment = await CommentModel.findById(commentId);
+        if (!comment) {
+          res.status(404).json({ error: 'Комментарий не найден' });
+          return;
+        }
+
+        // Проверяем права на удаление (автор комментария или админ)
+        if (comment.author.toString() !== userId) {
+          const user = await UserModel.findById(userId);
+          if (!user || user.role !== 'admin') {
+            res.status(403).json({ error: 'Нет прав на удаление комментария' });
+            return;
+          }
+        }
+
+        // Удаляем комментарий
+        await CommentModel.findByIdAndDelete(commentId);
+
+        console.log('Комментарий успешно удален');
+
+        res.json({
+          message: 'Комментарий успешно удален',
+          commentId
+        });
+      } catch (error: any) {
+        console.error('Ошибка при удалении комментария:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для редактирования комментария
+    app.put('/api/content/:contentId/comments/:commentId', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { contentId, commentId } = req.params;
+        const { content, userId } = req.body;
+
+        console.log('Редактирование комментария:', { contentId, commentId, userId, content });
+
+        // Проверяем обязательные поля
+        if (!content || !userId) {
+          res.status(400).json({ error: 'Необходимо указать content и userId' });
+          return;
+        }
+
+        // Проверяем существование контента
+        const contentExists = await ContentModel.findById(contentId);
+        if (!contentExists) {
+          res.status(404).json({ error: 'Контент не найден' });
+          return;
+        }
+
+        // Проверяем существование комментария
+        const comment = await CommentModel.findById(commentId);
+        if (!comment) {
+          res.status(404).json({ error: 'Комментарий не найден' });
+          return;
+        }
+
+        // Проверяем права на редактирование (только автор может редактировать)
+        if (comment.author.toString() !== userId) {
+          res.status(403).json({ error: 'Нет прав на редактирование комментария' });
+          return;
+        }
+
+        // Обновляем комментарий
+        const updatedComment = await CommentModel.findByIdAndUpdate(
+          commentId,
+          { $set: { content } },
+          { new: true }
+        ).populate('author', 'username email avatarUrl');
+
+        console.log('Комментарий успешно обновлен:', updatedComment);
+
+        res.json({
+          message: 'Комментарий успешно обновлен',
+          comment: updatedComment
+        });
+      } catch (error: any) {
+        console.error('Ошибка при редактировании комментария:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для лайка комментария
+    app.post('/api/content/:contentId/comments/:commentId/like', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { contentId, commentId } = req.params;
+        const { userId } = req.body;
+
+        console.log('Добавление лайка к комментарию:', { contentId, commentId, userId });
+
+        // Проверяем обязательные поля
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование комментария
+        const comment = await CommentModel.findById(commentId);
+        if (!comment) {
+          res.status(404).json({ error: 'Комментарий не найден' });
+          return;
+        }
+
+        // Проверяем, не лайкнул ли уже пользователь
+        const hasLike = comment.likes?.includes(userId);
+        if (hasLike) {
+          res.status(400).json({ error: 'Вы уже поставили лайк' });
+          return;
+        }
+
+        // Добавляем лайк
+        const updatedComment = await CommentModel.findByIdAndUpdate(
+          commentId,
+          { 
+            $addToSet: { likes: userId },
+            $inc: { likesCount: 1 }
+          },
+          { new: true }
+        ).populate('author', 'username email avatarUrl');
+
+        console.log('Комментарий обновлен:', updatedComment);
+
+        res.json({
+          message: 'Лайк успешно добавлен',
+          comment: updatedComment
+        });
+      } catch (error: any) {
+        console.error('Ошибка при добавлении лайка:', error);
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // Роут для удаления лайка с комментария
+    app.delete('/api/content/:contentId/comments/:commentId/like', async (req: Request, res: Response): Promise<void> => {
+      try {
+        const { contentId, commentId } = req.params;
+        const { userId } = req.body;
+
+        console.log('Удаление лайка с комментария:', { contentId, commentId, userId });
+
+        // Проверяем обязательные поля
+        if (!userId) {
+          res.status(400).json({ error: 'Необходимо указать userId' });
+          return;
+        }
+
+        // Проверяем существование комментария
+        const comment = await CommentModel.findById(commentId);
+        if (!comment) {
+          res.status(404).json({ error: 'Комментарий не найден' });
+          return;
+        }
+
+        // Проверяем, есть ли лайк от пользователя
+        const hasLike = comment.likes?.includes(userId);
+        if (!hasLike) {
+          res.status(400).json({ error: 'Лайк не найден' });
+          return;
+        }
+
+        // Удаляем лайк
+        const updatedComment = await CommentModel.findByIdAndUpdate(
+          commentId,
+          { 
+            $pull: { likes: userId },
+            $inc: { likesCount: -1 }
+          },
+          { new: true }
+        ).populate('author', 'username email avatarUrl');
+
+        console.log('Комментарий обновлен:', updatedComment);
+
+        res.json({
+          message: 'Лайк успешно удален',
+          comment: updatedComment
         });
       } catch (error: any) {
         console.error('Ошибка при удалении лайка:', error);
