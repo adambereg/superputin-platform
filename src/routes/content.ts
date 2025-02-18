@@ -101,4 +101,50 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// Получение контента по ID
+router.get('/:contentId', async (req, res) => {
+  try {
+    const content = await ContentModel.findById(req.params.contentId)
+      .populate('authorId', 'username');
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Контент не найден' });
+    }
+
+    res.json({ content });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Ошибка получения контента'
+    });
+  }
+});
+
+// Удаление контента
+router.delete('/:contentId', async (req, res) => {
+  try {
+    const content = await ContentModel.findById(req.params.contentId);
+    if (!content) {
+      return res.status(404).json({ error: 'Контент не найден' });
+    }
+
+    // Проверяем права (временно отключено)
+    // if (content.authorId.toString() !== req.user.id) {
+    //   return res.status(403).json({ error: 'Нет прав на удаление' });
+    // }
+
+    // Удаляем файл из R2
+    const fileName = content.fileUrl.split('/').pop();
+    if (fileName) {
+      await storageService.deleteFile(fileName);
+    }
+
+    await content.deleteOne();
+    res.json({ message: 'Контент успешно удален' });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Ошибка удаления контента'
+    });
+  }
+});
+
 export default router; 
