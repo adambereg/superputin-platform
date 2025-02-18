@@ -10,7 +10,7 @@
     "dev": "nodemon --max-old-space-size=4096 -r dotenv/config src/server.ts",
     "build": "rm -rf dist && tsc -p tsconfig.server.json",
     "start": "node dist/server.js",
-    "vercel-build": "npm run build"
+    "vercel-build": "echo 'Build step skipped - using @vercel/node'"
   },
   "dependencies": {
     "@tonclient/core": "^1.30.0",

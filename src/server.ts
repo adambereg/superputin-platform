@@ -10,6 +10,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Тестовые маршруты
+app.get('/api/test', (_req, res) => {
+  res.json({ message: 'API работает' });
+});
+
+app.get('/api/env-test', (_req, res) => {
+  res.json({
+    mongodb: !!process.env.MONGODB_URL,
+    r2: !!process.env.R2_BUCKET,
+    ton: !!process.env.TON_NETWORK
+  });
+});
+
 async function startServer() {
   try {
     await DatabaseService.getInstance().connect();
