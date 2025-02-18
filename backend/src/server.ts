@@ -21,13 +21,10 @@ async function startServer() {
     // 1. Базовые middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-    const corsOptions = {
-      origin: '*',
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      optionsSuccessStatus: 204
-    };
-    app.use(cors(corsOptions));
+    app.use(cors({
+      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      credentials: true
+    }));
     app.options('*', cors());
 
     // 2. Статические файлы

@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import { Star, BookOpen, Clock, TrendingUp } from 'lucide-react';
+import { ComicCard } from '../components/ComicCard';
+import { useComics } from '../hooks';
+import { Button } from '../components/ui/Button';
+import { Loading } from '../components/ui/Loading';
+import { Error } from '../components/ui/Error';
 
 const breakpointColumns = {
   default: 3,
@@ -80,17 +85,28 @@ const comicsList = [
 
 const categories = ["All", "Action", "Sci-Fi", "Fantasy"];
 
-export function Comics() {
+export const Comics = () => {
+  const { comics } = useComics();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState("popular");
 
-  const filteredComics = comicsList
-    .filter(comic => selectedCategory === "All" || comic.category === selectedCategory)
-    .sort((a, b) => {
-      if (sortBy === "popular") return parseInt(b.views) - parseInt(a.views);
-      if (sortBy === "rating") return b.rating - a.rating;
-      return 0;
-    });
+  if (comics.isLoading) {
+    return <Loading message="Loading comics..." />;
+  }
+
+  if (comics.isError) {
+    return (
+      <Error
+        title="Failed to load comics"
+        message="Unable to load comics. Please try again."
+        onRetry={() => comics.refetch()}
+      />
+    );
+  }
+
+  const filteredComics = comics.data?.data.filter(
+    comic => selectedCategory === "All" || comic.category === selectedCategory
+  );
 
   return (
     <div className="space-y-8">
@@ -148,12 +164,12 @@ export function Comics() {
         className="flex -ml-4 w-auto"
         columnClassName="pl-4 bg-clip-padding"
       >
-        {filteredComics.map((comic) => (
+        {filteredComics?.map((comic) => (
           <div key={comic.id} className="mb-4 break-inside-avoid">
             <div className="bg-background border border-text/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
               <div className="relative group">
                 <img
-                  src={comic.cover}
+                  src={comic.coverUrl}
                   alt={comic.title}
                   className="w-full h-[500px] object-cover transition-transform duration-300 group-hover:scale-105"
                 />
@@ -199,6 +215,20 @@ export function Comics() {
           </div>
         ))}
       </Masonry>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((id) => (
+          <ComicCard
+            key={id}
+            id={id.toString()}
+            coverUrl="/placeholder-comic.jpg"
+            title={`Comic ${id}`}
+            author="Comic Artist"
+            episode={1}
+            totalEpisodes={10}
+          />
+        ))}
+      </div>
     </div>
   );
-}
+};

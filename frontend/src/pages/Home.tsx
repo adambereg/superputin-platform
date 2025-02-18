@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Rocket, Image, Coins, Heart, Eye, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MemeCard } from '../components/MemeCard';
+import { ComicCard } from '../components/ComicCard';
+import { NFTCard } from '../components/NFTCard';
 
 const featuredCollections = [
   {
@@ -65,7 +68,7 @@ const featuredCollections = [
   }
 ];
 
-export function Home() {
+export const Home = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [likedCollections, setLikedCollections] = useState<number[]>([]);
   const slidesToShow = 3;
@@ -92,7 +95,49 @@ export function Home() {
   const visibleCollections = featuredCollections.slice(currentSlide, currentSlide + slidesToShow);
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-12">
+      <section>
+        <h2 className="text-2xl font-bold mb-6">Featured Comics</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Placeholder data */}
+          <ComicCard
+            id="1"
+            coverUrl="/placeholder-comic.jpg"
+            title="Super Putin Adventures"
+            author="Comic Artist"
+            episode={1}
+            totalEpisodes={10}
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-bold mb-6">Popular Memes</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Placeholder data */}
+          <MemeCard
+            imageUrl="/placeholder-meme.jpg"
+            title="Funny Meme"
+            author="Meme Creator"
+            likes={42}
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-2xl font-bold mb-6">Latest NFTs</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Placeholder data */}
+          <NFTCard
+            imageUrl="/placeholder-nft.jpg"
+            title="Super NFT"
+            price="100"
+            owner="0x1234...5678"
+            onBuy={() => alert('Buy NFT')}
+          />
+        </div>
+      </section>
+
       <section className="text-center space-y-6 py-16">
         <h1 className="font-poppins font-bold text-5xl md:text-6xl">
           Welcome to <span className="text-primary">SuperPutin</span>
@@ -251,4 +296,4 @@ export function Home() {
       </section>
     </div>
   );
-}
+};

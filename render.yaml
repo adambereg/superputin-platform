@@ -1,28 +1,23 @@
 services:
   - type: web
-    name: superputin-platform-backend
+    name: superputin-backend
     env: node
-    plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3000
-      - key: MONGODB_URL
+      - key: MONGODB_URI
         sync: false
-      - key: AWS_ACCESS_KEY_ID
+      - key: JWT_SECRET
         sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_BUCKET
-        sync: false
-      - key: AWS_REGION
-        sync: false
-    autoDeploy: true
-    healthCheckPath: /api/test
-    disk:
-      name: uploads
-      mountPath: /opt/render/project/src/backend/uploads
-      sizeGB: 1 
+      - key: CORS_ORIGIN
+        value: https://superputin.onrender.com
+
+  - type: static
+    name: superputin-frontend
+    buildCommand: cd frontend && npm install && npm run build
+    publishDir: frontend/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://superputin-backend.onrender.com
