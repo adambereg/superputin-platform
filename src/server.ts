@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { DatabaseService } from './database/DatabaseService';
 import authRoutes from './routes/auth';
+import contentRoutes from './routes/content';
 
 const app = express();
 app.use(express.json());
@@ -26,6 +27,7 @@ app.get('/api/env-test', (_req, res) => {
 
 // API маршруты
 app.use('/api/auth', authRoutes);
+app.use('/api/content', contentRoutes);
 
 async function startServer() {
   try {
