@@ -19,7 +19,7 @@ export class ContentService {
     user: User, 
     file: UploadedFile, 
     type: ContentType, 
-    metadata: any
+    metadata: { title: string; fileUrl: string }
   ): Promise<Content> {
     // Проверка прав пользователя
     if (!user.id) {
@@ -30,8 +30,8 @@ export class ContentService {
     const content = new ContentModel({
       authorId: user.id,
       type,
-      title: metadata.title || file.originalname,
-      fileUrl: '', // Будет заполнено после загрузки файла
+      title: metadata.title,
+      fileUrl: metadata.fileUrl,
       metadata
     });
 
