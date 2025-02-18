@@ -1,6 +1,5 @@
-import { User } from '../models/User';
+import { User, UserModel } from '../models/User';
 import { TonWallet } from '../blockchain/TonWallet';
-import { UserModel } from '../models/User';
 import * as crypto from 'crypto';
 
 export class AuthService {
@@ -46,11 +45,11 @@ export class AuthService {
         // Временный адрес кошелька
         const tempWalletAddress = '0x' + crypto.randomBytes(20).toString('hex');
         
-        // Создание пользователя
-        const user = new User({
+        // Создание пользователя через модель
+        const user = new UserModel({
             username,
             email,
-            walletAddress: tempWalletAddress, // Временный адрес
+            walletAddress: tempWalletAddress,
             role: 'user',
             points: 0,
             passwordHash: hash,
@@ -70,40 +69,24 @@ export class AuthService {
 
   async login(email: string, password: string): Promise<User> {
     // Поиск пользователя
-    const userDoc = await UserModel.findOne({ email });
-    if (!userDoc) {
+    const user = await UserModel.findOne({ email });
+    if (!user) {
       throw new Error('Пользователь не найден');
     }
 
     // Проверка что passwordSalt существует
-    if (!userDoc.passwordSalt) {
+    if (!user.passwordSalt) {
       throw new Error('Ошибка аутентификации');
     }
 
     // Проверка пароля
     const hash = crypto
-      .pbkdf2Sync(password, userDoc.passwordSalt, 1000, 64, 'sha512')
+      .pbkdf2Sync(password, user.passwordSalt, 1000, 64, 'sha512')
       .toString('hex');
 
-    if (hash !== userDoc.passwordHash) {
+    if (hash !== user.passwordHash) {
       throw new Error('Неверный пароль');
     }
-
-    // Создаем объект пользователя без id в конструкторе
-    const user = new User({
-      username: userDoc.username,
-      email: userDoc.email,
-      walletAddress: userDoc.walletAddress,
-      role: userDoc.role,
-      points: userDoc.points,
-      createdContent: userDoc.createdContent,
-      ownedNFTs: userDoc.ownedNFTs,
-      passwordHash: userDoc.passwordHash,
-      passwordSalt: userDoc.passwordSalt
-    });
-    
-    // Устанавливаем id после создания
-    user.id = userDoc.id;
 
     return user;
   }

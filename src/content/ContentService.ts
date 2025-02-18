@@ -1,5 +1,5 @@
 import { User } from '../models/User';
-import { Content, ContentType } from '../models/Content';
+import { Content, ContentModel, ContentType } from '../models/Content';
 import { GameificationService } from '../gamification/GameificationService';
 
 interface UploadedFile {
@@ -27,7 +27,7 @@ export class ContentService {
     }
 
     // Загрузка контента
-    const content = new Content({
+    const content = new ContentModel({
       authorId: user.id,
       type,
       title: metadata.title || file.originalname,
