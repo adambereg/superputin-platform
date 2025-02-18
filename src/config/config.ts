@@ -7,13 +7,15 @@ dotenv.config();
 export const config = {
   server: {
     port: process.env.PORT || 3000,
-    host: process.env.HOST || 'localhost'
+    host: process.env.HOST || '0.0.0.0'
   },
   database: {
     url: process.env.MONGODB_URL || 'mongodb://localhost:27017/superputin',
     options: {
       useNewUrlParser: true,
-      useUnifiedTopology: true
+      useUnifiedTopology: true,
+      retryWrites: true,
+      w: 'majority'
     } as ConnectOptions
   },
   storage: {

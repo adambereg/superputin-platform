@@ -17,8 +17,8 @@ export interface IContent {
   type: ContentType;
   imageUrl: string;
   creator: string;
-  likes: mongoose.Types.ObjectId[]; // Меняем тип на ObjectId[]
-  likesCount: number;
+  likes?: mongoose.Types.ObjectId[]; // Делаем опциональным
+  likesCount?: number; // Делаем опциональным
   tags: string[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -74,8 +74,8 @@ export class Content implements IContent {
   type: ContentType;
   imageUrl: string;
   creator: string;
-  likes: mongoose.Types.ObjectId[] = []; // Инициализируем пустым массивом
-  likesCount: number = 0;
+  likes?: mongoose.Types.ObjectId[] = []; // Инициализируем пустым массивом
+  likesCount?: number = 0;
   tags: string[];
   createdAt?: Date;
   updatedAt?: Date;
