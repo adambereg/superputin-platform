@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { DatabaseService } from './database/DatabaseService';
+import authRoutes from './routes/auth';
 
 const app = express();
 app.use(express.json());
@@ -22,6 +23,9 @@ app.get('/api/env-test', (_req, res) => {
     ton: !!process.env.TON_NETWORK
   });
 });
+
+// API маршруты
+app.use('/api/auth', authRoutes);
 
 async function startServer() {
   try {
