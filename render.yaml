@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: npm start
+    startCommand: node --optimize-for-size --max-old-space-size=64 dist/server.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -22,8 +22,6 @@ services:
         sync: false
       - key: R2_PUBLIC_URL
         value: https://pub-d428e22145884a3e9e1719f9807f326f.r2.dev
-      - key: NODE_OPTIONS
-        value: --max-old-space-size=128
     autoDeploy: true
     healthCheckPath: /api/health
     disk:
