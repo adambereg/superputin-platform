@@ -22,9 +22,11 @@ services:
         sync: false
       - key: R2_PUBLIC_URL
         value: https://pub-d428e22145884a3e9e1719f9807f326f.r2.dev
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=128
     autoDeploy: true
-    healthCheckPath: /api/test
+    healthCheckPath: /api/health
     disk:
       name: uploads
-      mountPath: /opt/render/project/src/backend/uploads
+      mountPath: /opt/render/project/src/uploads
       sizeGB: 1

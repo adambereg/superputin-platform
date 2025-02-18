@@ -14,6 +14,10 @@ async function startServer() {
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
     });
+
+    app.get('/api/health', (_req, res) => {
+      res.json({ status: 'ok' });
+    });
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

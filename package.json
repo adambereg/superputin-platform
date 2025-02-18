@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "nodemon --max-old-space-size=4096 -r dotenv/config src/server.ts",
     "build": "rm -rf dist && tsc -p tsconfig.server.json",
-    "start": "node --max-old-space-size=256 dist/server.js",
+    "start": "node dist/server.js",
     "postinstall": "npm run build"
   },
   "dependencies": {
