@@ -147,4 +147,68 @@ router.delete('/:contentId', async (req, res) => {
   }
 });
 
+// Поставить/убрать лайк
+router.post('/:contentId/like', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const content = await ContentModel.findById(req.params.contentId);
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Контент не найден' });
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    const hasLiked = content.likes.includes(userId);
+    
+    if (hasLiked) {
+      // Убираем лайк
+      content.likes = content.likes.filter(id => id.toString() !== userId);
+      content.likesCount = Math.max(0, content.likesCount - 1);
+    } else {
+      // Добавляем лайк
+      content.likes.push(userId);
+      content.likesCount += 1;
+    }
+
+    await content.save();
+
+    res.json({
+      message: hasLiked ? 'Лайк убран' : 'Лайк добавлен',
+      likesCount: content.likesCount,
+      hasLiked: !hasLiked
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Ошибка обработки лайка'
+    });
+  }
+});
+
+// Получить список лайкнувших пользователей
+router.get('/:contentId/likes', async (req, res) => {
+  try {
+    const content = await ContentModel.findById(req.params.contentId)
+      .populate('likes', 'username');
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Контент не найден' });
+    }
+
+    res.json({
+      likesCount: content.likesCount,
+      users: content.likes
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Ошибка получения списка лайков'
+    });
+  }
+});
+
 export default router; 

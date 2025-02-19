@@ -8,6 +8,8 @@ export interface Content extends Document {
   title: string;
   fileUrl: string;
   metadata: any;
+  likes: string[]; // Массив ID пользователей
+  likesCount: number; // Количество лайков
   createdAt: Date;
   updatedAt: Date;
 }
@@ -17,7 +19,9 @@ const contentSchema = new Schema({
   type: { type: String, enum: ['meme', 'comic', 'nft'], required: true },
   title: { type: String, required: true },
   fileUrl: { type: String, required: true },
-  metadata: { type: Schema.Types.Mixed }
+  metadata: { type: Schema.Types.Mixed },
+  likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  likesCount: { type: Number, default: 0 }
 }, {
   timestamps: true
 });
