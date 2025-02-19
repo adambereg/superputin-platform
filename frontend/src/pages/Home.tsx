@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Rocket, Image, Coins, Heart, Eye, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Rocket, Image, Coins, Heart, Eye, Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useUser } from '../contexts/UserContext';
+import { Collection } from '../models/Collection';
 
-const featuredCollections = [
+const featuredCollections: Collection[] = [
   {
     id: 1,
     name: "Cosmic Legends",
@@ -66,6 +68,7 @@ const featuredCollections = [
 ];
 
 export function Home() {
+  const { user, isAuthenticated } = useUser();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [likedCollections, setLikedCollections] = useState<number[]>([]);
   const slidesToShow = 3;
@@ -95,7 +98,9 @@ export function Home() {
     <div className="space-y-16">
       <section className="text-center space-y-4">
         <h1 className="font-poppins font-bold text-5xl">
-          Welcome to SuperPutin Platform
+          {isAuthenticated 
+            ? `Welcome back, ${user?.username}!`
+            : 'Welcome to SuperPutin Platform'}
         </h1>
         <p className="text-text/70 max-w-2xl mx-auto">
           Explore our collection of comics, memes, and NFTs
@@ -125,9 +130,9 @@ export function Home() {
         </div>
       </section>
 
-      <section className="grid md:grid-cols-3 gap-8">
-        <div className="bg-background border border-text/10 rounded-xl p-6 text-center space-y-4">
-          <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-8 py-16">
+        <div className="text-center space-y-4">
+          <div className="bg-primary/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto">
             <Rocket className="text-primary" size={24} />
           </div>
           <h3 className="font-poppins font-semibold text-xl">NFT Marketplace</h3>

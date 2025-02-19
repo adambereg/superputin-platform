@@ -13,7 +13,7 @@ function App() {
   return (
     <UserProvider>
       <TonConnectUIProvider manifestUrl="https://raw.githubusercontent.com/ton-community/tutorials/main/03-wallet/manifest.json">
-        <BrowserRouter>
+        <BrowserRouter basename="/">
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<Home />} />

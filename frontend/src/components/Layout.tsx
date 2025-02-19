@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, Outlet } from 'react-router-dom';
-import { Menu, Sun, Moon, Wallet } from 'lucide-react';
+import { Link, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { Menu, Sun, Moon, Wallet, X } from 'lucide-react';
 import { useTonConnectUI } from '@tonconnect/ui-react';
 import { AuthModal } from './AuthModal';
 import { useUser } from '../contexts/UserContext';
@@ -10,7 +10,8 @@ export function Layout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const { user, isAuthenticated } = useUser();
+  const { isAuthenticated } = useUser();
+  const location = useLocation();
 
   useEffect(() => {
     if (isDark) {
@@ -19,6 +20,10 @@ export function Layout() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDark]);
+
+  if (!isAuthenticated && location.pathname !== '/') {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,6 +77,21 @@ export function Layout() {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {isMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-background">
+          <div className="p-4 space-y-4">
+            <div className="flex justify-end">
+              <button onClick={() => setIsMenuOpen(false)} className="p-2">
+                <X size={24} />
+              </button>
+            </div>
+            <Link to="/comics" className="block py-2 hover:text-primary">Comics</Link>
+            <Link to="/memes" className="block py-2 hover:text-primary">Memes</Link>
+            <Link to="/nfts" className="block py-2 hover:text-primary">NFTs</Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

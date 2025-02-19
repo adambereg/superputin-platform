@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import { Star, BookOpen, Clock, TrendingUp } from 'lucide-react';
+import { api } from '../api/client';
+import { Comic } from '../models/Content';
 
 const breakpointColumns = {
   default: 3,
@@ -9,9 +11,9 @@ const breakpointColumns = {
   700: 1
 };
 
-const comicsList = [
+const comicsList: Comic[] = [
   {
-    id: 1,
+    id: "1",
     title: "SuperPutin: Origins",
     cover: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=800&h=1200&q=80",
     author: "Alex Smith",
@@ -81,10 +83,25 @@ const comicsList = [
 const categories = ["All", "Action", "Sci-Fi", "Fantasy"];
 
 export function Comics() {
+  const [comics, setComics] = useState<Comic[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [sortBy, setSortBy] = useState("popular");
 
-  const filteredComics = comicsList
+  useEffect(() => {
+    api.content.getComics()
+      .then(response => {
+        setComics(response.content);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError('Ошибка загрузки комиксов');
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredComics = comics
     .filter(comic => selectedCategory === "All" || comic.category === selectedCategory)
     .sort((a, b) => {
       if (sortBy === "popular") return parseInt(b.views) - parseInt(a.views);

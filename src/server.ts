@@ -26,6 +26,20 @@ app.get('/api/env-test', (_req, res) => {
   });
 });
 
+// Базовый маршрут
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'SuperPutin Platform API',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      content: '/api/content',
+      notifications: '/api/notifications'
+    },
+    docs: 'https://github.com/yourusername/superputin-platform'
+  });
+});
+
 // API маршруты
 app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
