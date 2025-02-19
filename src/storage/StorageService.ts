@@ -54,4 +54,18 @@ export class StorageService {
     };
     return contentTypes[ext || ''] || 'application/octet-stream';
   }
+
+  async deleteFile(fileName: string): Promise<void> {
+    try {
+      const params: S3.DeleteObjectRequest = {
+        Bucket: process.env.R2_BUCKET!,
+        Key: fileName
+      };
+
+      await this.s3.deleteObject(params).promise();
+    } catch (error) {
+      console.error('Ошибка удаления файла:', error);
+      throw error;
+    }
+  }
 } 
