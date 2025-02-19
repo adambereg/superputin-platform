@@ -1,6 +1,12 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type NotificationType = 'like' | 'comment' | 'mention';
+export type NotificationType = 
+  | 'like' 
+  | 'comment' 
+  | 'mention' 
+  | 'achievement' 
+  | 'nft_purchase' 
+  | 'reply';
 
 export interface Notification extends Document {
   userId: string;
@@ -10,15 +16,23 @@ export interface Notification extends Document {
   message: string;
   read: boolean;
   createdAt: Date;
+  metadata?: any;
+  level?: string;
 }
 
 const notificationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['like', 'comment', 'mention'], required: true },
+  type: { 
+    type: String, 
+    enum: ['like', 'comment', 'mention', 'achievement', 'nft_purchase', 'reply'], 
+    required: true 
+  },
   contentId: { type: Schema.Types.ObjectId, ref: 'Content' },
-  fromUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  fromUserId: { type: Schema.Types.ObjectId, ref: 'User' },
   message: { type: String, required: true },
-  read: { type: Boolean, default: false }
+  read: { type: Boolean, default: false },
+  metadata: { type: Schema.Types.Mixed },
+  level: { type: String, enum: ['info', 'success', 'warning'], default: 'info' }
 }, {
   timestamps: true
 });

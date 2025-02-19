@@ -17,30 +17,62 @@ export class NotificationService {
   async createNotification(
     user: User,
     type: NotificationType,
-    fromUser: User,
-    content?: Content
+    fromUser: User | null,
+    content?: Content,
+    metadata?: any
   ): Promise<void> {
-    const message = this.generateMessage(type, fromUser.username, content?.title);
+    const message = this.generateMessage(
+      type, 
+      fromUser?.username || 'Система', 
+      content?.title,
+      metadata
+    );
 
     await NotificationModel.create({
       userId: user.id,
       type,
       contentId: content?.id,
-      fromUserId: fromUser.id,
-      message
+      fromUserId: fromUser?.id,
+      message,
+      metadata,
+      level: this.getNotificationLevel(type)
     });
   }
 
-  private generateMessage(type: NotificationType, username: string, contentTitle?: string): string {
+  private generateMessage(
+    type: NotificationType, 
+    username: string, 
+    contentTitle?: string,
+    metadata?: any
+  ): string {
     switch (type) {
       case 'like':
         return `${username} лайкнул ваш контент "${contentTitle}"`;
       case 'comment':
-        return `${username} прокомментировал ваш контент "${contentTitle}"`;
+        return `${username} оставил комментарий к "${contentTitle}"`;
       case 'mention':
-        return `${username} упомянул вас в комментарии`;
+        return `${username} упомянул вас в комментарии к "${contentTitle}"`;
+      case 'achievement':
+        return `Поздравляем! Вы получили достижение "${metadata?.achievementName}"`;
+      case 'nft_purchase':
+        return `${username} купил ваш NFT "${contentTitle}"`;
+      case 'reply':
+        return `${username} ответил на ваш комментарий в "${contentTitle}"`;
       default:
         return 'Новое уведомление';
+    }
+  }
+
+  private getNotificationLevel(type: NotificationType): 'info' | 'success' | 'warning' {
+    switch (type) {
+      case 'achievement':
+        return 'success';
+      case 'nft_purchase':
+        return 'success';
+      case 'mention':
+        return 'warning';
+      default:
+        return 'info';
     }
   }
 
