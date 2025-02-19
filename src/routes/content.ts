@@ -54,6 +54,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       fileUrl
     });
 
+    // Проверяем, что authorId установлен
+    if (!content.authorId) {
+      throw new Error('Ошибка установки автора контента');
+    }
+
     res.json({
       message: 'Контент успешно загружен',
       content: {
