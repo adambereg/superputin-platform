@@ -2,15 +2,15 @@ import React, { createContext, useContext, useState } from 'react';
 
 interface User {
   id: string;
+  address: string;
   username: string;
-  email: string;
-  role: string;
 }
 
 interface UserContextType {
   user: User | null;
-  setUser: (user: User | null) => void;
   isAuthenticated: boolean;
+  login: (user: User) => void;
+  logout: () => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -18,12 +18,16 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
+  const login = (userData: User) => {
+    setUser(userData);
+  };
+
+  const logout = () => {
+    setUser(null);
+  };
+
   return (
-    <UserContext.Provider value={{ 
-      user, 
-      setUser,
-      isAuthenticated: !!user 
-    }}>
+    <UserContext.Provider value={{ user, isAuthenticated: !!user, login, logout }}>
       {children}
     </UserContext.Provider>
   );

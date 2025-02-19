@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { Menu, Sun, Moon, Wallet } from 'lucide-react';
 import { useTonConnectUI } from '@tonconnect/ui-react';
@@ -6,13 +6,13 @@ import { AuthModal } from './AuthModal';
 import { useUser } from '../contexts/UserContext';
 
 export function Layout() {
-  const [isDark, setIsDark] = React.useState(false);
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [isDark, setIsDark] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { user, isAuthenticated } = useUser();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
     } else {

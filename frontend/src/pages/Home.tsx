@@ -93,6 +93,15 @@ export function Home() {
 
   return (
     <div className="space-y-16">
+      <section className="text-center space-y-4">
+        <h1 className="font-poppins font-bold text-5xl">
+          Welcome to SuperPutin Platform
+        </h1>
+        <p className="text-text/70 max-w-2xl mx-auto">
+          Explore our collection of comics, memes, and NFTs
+        </p>
+      </section>
+
       <section className="text-center space-y-6 py-16">
         <h1 className="font-poppins font-bold text-5xl md:text-6xl">
           Welcome to <span className="text-primary">SuperPutin</span>
