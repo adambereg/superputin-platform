@@ -4,10 +4,12 @@ import { ContentService } from '../content/ContentService';
 import { StorageService } from '../storage/StorageService';
 import { UserModel } from '../models/User';
 import { ContentType, ContentModel } from '../models/Content';
+import { NotificationService } from '../notifications/NotificationService';
 
 const router = Router();
 const contentService = new ContentService();
 const storageService = new StorageService();
+const notificationService = NotificationService.getInstance();
 
 // Настройка multer для загрузки файлов
 const upload = multer({
@@ -172,6 +174,17 @@ router.post('/:contentId/like', async (req, res) => {
       // Добавляем лайк
       content.likes.push(userId);
       content.likesCount += 1;
+
+      // Создаем уведомление только при добавлении лайка
+      const contentAuthor = await UserModel.findById(content.authorId);
+      if (contentAuthor && contentAuthor.id !== userId) {
+        await notificationService.createNotification(
+          contentAuthor,
+          'like',
+          user,
+          content
+        );
+      }
     }
 
     await content.save();
