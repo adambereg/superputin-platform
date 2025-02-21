@@ -10,7 +10,7 @@ export function Layout() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [tonConnectUI] = useTonConnectUI();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const { isAuthenticated } = useUser();
+  const { isAuthenticated, logout, user } = useUser();
   const location = useLocation();
 
   useEffect(() => {
@@ -45,11 +45,11 @@ export function Layout() {
                 {isDark ? <Sun size={20} /> : <Moon size={20} />}
               </button>
               <button
-                onClick={() => isAuthenticated ? tonConnectUI.connectWallet() : setIsAuthModalOpen(true)}
+                onClick={() => isAuthenticated ? logout() : setIsAuthModalOpen(true)}
                 className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors"
               >
                 <Wallet size={20} />
-                {isAuthenticated ? 'Connect Wallet' : 'Sign In'}
+                {isAuthenticated ? 'Sign Out' : 'Sign In'}
               </button>
             </div>
 

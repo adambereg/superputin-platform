@@ -48,9 +48,9 @@ router.post('/test', async (req, res) => {
       metadata
     );
 
-    res.json({ message: 'Тестовое уведомление создано' });
+    return res.json({ message: 'Тестовое уведомление создано' });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка создания уведомления'
     });
   }

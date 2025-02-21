@@ -1,46 +1,120 @@
 import { Router } from 'express';
 import { AuthService } from '../auth/AuthService';
 import { UserModel } from '../models/User';
+import { body, validationResult } from 'express-validator';
+import { Request, Response } from 'express';
 
 const router = Router();
 const authService = AuthService.getInstance();
 
-router.post('/register', async (req, res) => {
+// Регистрация
+router.post('/register', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 8 }),
+  body('username').trim().isLength({ min: 3 })
+], async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body;
-    const user = await authService.register(username, email, password);
-    res.json({ 
-      message: 'Регистрация успешна',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password, username } = req.body;
+    await authService.register(email, password, username);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration successful. Please check your email to verify your account.'
     });
   } catch (error) {
-    res.status(400).json({ 
-      error: error instanceof Error ? error.message : 'Ошибка регистрации' 
+    console.error('Registration error:', error);
+    return res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Registration failed'
     });
   }
 });
 
-router.post('/login', async (req, res) => {
+// Подтверждение email
+router.get('/verify-email', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-    const user = await authService.login(email, password);
-    res.json({ 
-      message: 'Вход выполнен успешно',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role
-      }
+    const { token } = req.query;
+    await authService.verifyEmail(token as string);
+    return res.json({ 
+      success: true,
+      message: 'Email verified successfully. You can now log in.' 
     });
   } catch (error) {
-    res.status(401).json({ 
-      error: error instanceof Error ? error.message : 'Ошибка входа' 
+    return res.status(400).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Email verification failed' 
+    });
+  }
+});
+
+// Вход
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').exists()
+], async (req: Request, res: Response) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { email, password } = req.body;
+    const { user, token } = await authService.login(email, password);
+
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      data: { user, token }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(401).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Login failed'
+    });
+  }
+});
+
+// Запрос сброса пароля
+router.post('/forgot-password', [
+  body('email').isEmail().normalizeEmail()
+], async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    await authService.requestPasswordReset(email);
+    return res.json({ 
+      success: true,
+      message: 'Password reset email sent.' 
+    });
+  } catch (error) {
+    return res.status(400).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Password reset request failed' 
+    });
+  }
+});
+
+// Сброс пароля
+router.post('/reset-password', [
+  body('token').exists(),
+  body('newPassword').isLength({ min: 8 })
+], async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+    await authService.resetPassword(token, newPassword);
+    return res.json({ 
+      success: true,
+      message: 'Password reset successful.' 
+    });
+  } catch (error) {
+    return res.status(400).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Password reset failed' 
     });
   }
 });
@@ -67,7 +141,7 @@ router.get('/profile/:userId', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'Пользователь не найден' });
     }
-    res.json({ 
+    return res.json({ 
       user: {
         id: user.id,
         username: user.username,
@@ -79,7 +153,7 @@ router.get('/profile/:userId', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
+    return res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Ошибка получения профиля' 
     });
   }
@@ -90,35 +164,17 @@ router.put('/profile/:userId', async (req, res) => {
   try {
     const { username, email } = req.body;
     
-    // Проверяем существование пользователя
-    const existingUser = await UserModel.findById(req.params.userId);
-    if (!existingUser) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-
-    // Проверяем уникальность username и email
-    const duplicateUser = await UserModel.findOne({
-      $and: [
-        { _id: { $ne: req.params.userId } },
-        { $or: [
-          { username: username },
-          { email: email }
-        ]}
-      ]
-    });
-
-    if (duplicateUser) {
-      return res.status(400).json({ error: 'Username или email уже используются' });
-    }
-
-    // Обновляем данные
     const updatedUser = await UserModel.findByIdAndUpdate(
       req.params.userId,
       { $set: { username, email } },
       { new: true }
     ).select('-passwordHash -passwordSalt');
 
-    res.json({ 
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'Пользователь не найден' });
+    }
+
+    return res.json({ 
       message: 'Профиль обновлен',
       user: {
         id: updatedUser.id,
@@ -129,8 +185,30 @@ router.put('/profile/:userId', async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ 
+    return res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Ошибка обновления профиля' 
+    });
+  }
+});
+
+// Удаляем маршрут Google авторизации полностью
+
+router.post('/vk', async (req, res) => {
+  try {
+    const { code } = req.body;
+    const user = await authService.loginWithVK(code);
+    res.json({ 
+      message: 'VK auth successful',
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    res.status(401).json({ 
+      error: error instanceof Error ? error.message : 'VK auth failed' 
     });
   }
 });

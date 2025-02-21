@@ -4,6 +4,9 @@ interface User {
   id: string;
   address: string;
   username: string;
+  email: string;
+  role: 'user' | 'admin';
+  points: number;
 }
 
 interface UserContextType {

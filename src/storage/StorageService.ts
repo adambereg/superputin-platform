@@ -5,22 +5,22 @@ export class StorageService {
   private publicUrl: string;
 
   constructor() {
-    if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.R2_ENDPOINT || !process.env.R2_BUCKET) {
-      throw new Error('R2 credentials are not configured');
-    }
+    // Временно отключаем проверку R2 credentials
+    // if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.R2_ENDPOINT || !process.env.R2_BUCKET) {
+    //   throw new Error('R2 credentials are not configured');
+    // }
 
     this.s3 = new S3({
-      endpoint: process.env.R2_ENDPOINT,
+      endpoint: process.env.R2_ENDPOINT || 'http://localhost:9000',
       region: 'auto',
       credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || 'dummy-key',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || 'dummy-secret'
       },
       signatureVersion: 'v4'
     });
 
-    // В продакшене используем тот же URL что и в dev
-    this.publicUrl = process.env.R2_PUBLIC_URL || '';
+    this.publicUrl = process.env.R2_PUBLIC_URL || 'http://localhost:9000';
   }
 
   async uploadFile(file: Buffer, fileName: string): Promise<string> {

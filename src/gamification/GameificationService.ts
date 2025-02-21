@@ -17,13 +17,14 @@ export class GameificationService {
   }
 
   private async checkAchievements(user: User): Promise<void> {
-    // Проверка достижений на основе количества очков
-    const achievements = [
-      { points: 100, title: 'Начинающий' },
-      { points: 500, title: 'Продвинутый' },
-      { points: 1000, title: 'Эксперт' }
-    ];
+    // Временно закомментируем неиспользуемый код
+    // const achievements = [
+    //   { points: 100, title: 'Начинающий' },
+    //   { points: 500, title: 'Продвинутый' },
+    //   { points: 1000, title: 'Эксперт' }
+    // ];
     
-    // Логика выдачи достижений
+    // TODO: Реализовать логику выдачи достижений
+    console.log(`Checking achievements for user ${user.id} with ${user.points} points`);
   }
 } 

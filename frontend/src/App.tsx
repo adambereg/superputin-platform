@@ -1,15 +1,17 @@
-import * as React from 'react';
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { UserProvider } from './contexts/UserContext';
 import { Layout } from './components';
-import { Home } from './pages/Home';
-import { Comics } from './pages/Comics';
-import { ComicDetails } from './pages/ComicDetails';
-import { Memes } from './pages/Memes';
-import { NFTs } from './pages/NFTs';
+import { Home, Comics, ComicDetails, Memes, NFTs } from './pages';
+import bridge from '@vkontakte/vk-bridge';
 
 function App() {
+  useEffect(() => {
+    // Инициализируем VK Mini Apps
+    bridge.send('VKWebAppInit');
+  }, []);
+
   return (
     <UserProvider>
       <TonConnectUIProvider manifestUrl="https://raw.githubusercontent.com/ton-community/tutorials/main/03-wallet/manifest.json">
