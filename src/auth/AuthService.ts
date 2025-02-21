@@ -1,11 +1,42 @@
 import { User, UserModel } from '../models/User';
-import { TonWallet } from '../blockchain/TonWallet';
 import * as crypto from 'crypto';
+import { EmailService } from '../services/EmailService';
+import { config } from '../config/config';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { Secret, SignOptions } from 'jsonwebtoken';
+import { VKAuthProvider } from './providers/VKAuthProvider';
+
+interface LoginResponse {
+  user: {
+    id: string;
+    username: string;
+    email: string;
+    role: string;
+    points: number;
+    walletAddress: string;
+    isEmailVerified: boolean;
+  };
+  token: string;
+}
+
+interface RegisterResponse {
+  success: boolean;
+  message: string;
+}
 
 export class AuthService {
   private static instance: AuthService;
+  private emailService: EmailService;
+  private vkAuthProvider: VKAuthProvider;
   
-  private constructor() {}
+  private constructor() {
+    this.emailService = new EmailService();
+    this.vkAuthProvider = new VKAuthProvider(
+      process.env.VK_CLIENT_ID!,
+      process.env.VK_CLIENT_SECRET!
+    );
+  }
   
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -14,87 +45,182 @@ export class AuthService {
     return AuthService.instance;
   }
 
-  async register(username: string, email: string, password: string): Promise<User> {
+  private generateToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  private generateJWT(user: User): string {
+    const secret: Secret = config.app.jwtSecret || 'default-secret-key';
+    const payload = { 
+      id: user.id, 
+      email: user.email, 
+      role: user.role 
+    };
+    const options: SignOptions = { 
+      expiresIn: parseInt(config.app.jwtExpiresIn) || '7d' // Либо число секунд, либо строка
+    };
+    
+    return jwt.sign(payload, secret, options);
+  }
+
+  async register(email: string, password: string, username: string): Promise<RegisterResponse> {
     try {
-        console.log('Начало регистрации пользователя:', { username, email });
-        
-        // Проверка данных
-        if (!this.validateInput(username, email, password)) {
-            console.log('Ошибка валидации данных');
-            throw new Error('Неверные данные для регистрации');
-        }
+      // Проверяем уникальность email и username
+      const existingUser = await UserModel.findOne({
+        $or: [{ email }, { username }]
+      });
 
-        // Проверка существующего пользователя
-        const existingUser = await UserModel.findOne({ 
-            $or: [{ username }, { email }] 
-        });
-        
-        if (existingUser) {
-            console.log('Пользователь уже существует');
-            throw new Error('Пользователь с таким email или username уже существует');
-        }
+      if (existingUser) {
+        throw new Error('Email or username already exists');
+      }
 
-        // Хеширование пароля
-        const salt = crypto.randomBytes(16).toString('hex');
-        const hash = crypto
-            .pbkdf2Sync(password, salt, 1000, 64, 'sha512')
-            .toString('hex');
+      // Хешируем пароль
+      const passwordSalt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, passwordSalt);
+      
+      // Генерируем токен подтверждения
+      const emailVerificationToken = this.generateToken();
+      const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        console.log('Пароль захеширован');
+      // Временный адрес кошелька для тестирования
+      const tempWalletAddress = '0x' + crypto.randomBytes(20).toString('hex');
 
-        // Временный адрес кошелька
-        const tempWalletAddress = '0x' + crypto.randomBytes(20).toString('hex');
-        
-        // Создание пользователя через модель
-        const user = new UserModel({
-            username,
-            email,
-            walletAddress: tempWalletAddress,
-            role: 'user',
-            points: 0,
-            passwordHash: hash,
-            passwordSalt: salt
-        });
+      // Создаем пользователя
+      await UserModel.create({
+        email,
+        username,
+        passwordHash,
+        passwordSalt,
+        emailVerificationToken,
+        emailVerificationExpires,
+        walletAddress: tempWalletAddress, // Используем временный адрес
+        points: 0,
+        role: 'user',
+        isEmailVerified: false,
+        authProvider: 'local'
+      });
 
-        console.log('Сохранение пользователя...');
-        await user.save();
-        console.log('Пользователь успешно сохранен');
-        
-        return user;
+      return { 
+        success: true, 
+        message: 'Registration successful. Please check your email to verify your account.' 
+      };
     } catch (error) {
-        console.error('Ошибка при регистрации:', error);
-        throw error;
+      console.error('Registration error:', error);
+      throw error;
     }
   }
 
-  async login(email: string, password: string): Promise<User> {
-    // Поиск пользователя
-    const user = await UserModel.findOne({ email });
+  async verifyEmail(token: string): Promise<void> {
+    const user = await UserModel.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: Date.now() }
+    });
+
     if (!user) {
-      throw new Error('Пользователь не найден');
+      throw new Error('Invalid or expired verification token');
     }
 
-    // Проверка что passwordSalt существует
-    if (!user.passwordSalt) {
-      throw new Error('Ошибка аутентификации');
-    }
-
-    // Проверка пароля
-    const hash = crypto
-      .pbkdf2Sync(password, user.passwordSalt, 1000, 64, 'sha512')
-      .toString('hex');
-
-    if (hash !== user.passwordHash) {
-      throw new Error('Неверный пароль');
-    }
-
-    return user;
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+    await user.save();
   }
 
-  private validateInput(username: string, email: string, password: string): boolean {
-    // Базовая валидация
-    return username.length >= 3 && 
-           email.includes('@') && 
-           password.length >= 8;
+  async login(email: string, password: string): Promise<LoginResponse> {
+    try {
+      const user = await UserModel.findOne({ email });
+
+      if (!user) {
+        throw new Error('Invalid email or password');
+      }
+
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!isValidPassword) {
+        throw new Error('Invalid email or password');
+      }
+
+      // Временно отключаем проверку верификации email
+      // if (!user.isEmailVerified) {
+      //   throw new Error('Please verify your email address');
+      // }
+
+      const token = this.generateJWT(user);
+
+      return { 
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          points: user.points,
+          walletAddress: user.walletAddress,
+          isEmailVerified: user.isEmailVerified
+        }, 
+        token 
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
+  }
+
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await UserModel.findOne({ email });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const resetPasswordToken = this.generateToken();
+    const resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 час
+
+    user.resetPasswordToken = resetPasswordToken;
+    user.resetPasswordExpires = resetPasswordExpires;
+    await user.save();
+
+    await this.emailService.sendPasswordResetEmail(email, resetPasswordToken);
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const user = await UserModel.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      throw new Error('Invalid or expired reset token');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    user.passwordHash = passwordHash;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+  }
+
+  async loginWithVK(code: string): Promise<User> {
+    try {
+      const vkUser = await this.vkAuthProvider.getUserData(code);
+      
+      let user = await UserModel.findOne({ vkId: vkUser.id });
+      
+      if (!user) {
+        user = await UserModel.create({
+          email: vkUser.email,
+          username: `${vkUser.first_name} ${vkUser.last_name}`,
+          vkId: vkUser.id,
+          role: 'user',
+          points: 0,
+          isEmailVerified: true,
+          authProvider: 'vk'
+        });
+      }
+
+      return user;
+    } catch (error) {
+      console.error('VK auth error:', error);
+      throw new Error('Ошибка аутентификации через VK');
+    }
   }
 } 

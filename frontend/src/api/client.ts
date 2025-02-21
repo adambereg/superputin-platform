@@ -1,36 +1,133 @@
-const API_URL = 'https://superputin-platform.vercel.app/api';
+import type { User } from '@/models/User';
+
+const API_URL = 'http://localhost:3000/api';
 
 interface AuthResponse {
-  user: {
-    id: string;
-    address: string;
-    username: string;
-  } | null;
+  user: User | null;
   error?: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+}
+
+interface LoginResponse {
+  user: User;
+  token: string;
+}
+
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+};
+
 export const api = {
   auth: {
-    register: async (userData: { username: string; email: string; password: string }): Promise<AuthResponse> => {
+    register: async (data: { username: string; email: string; password: string }): Promise<ApiResponse<void>> => {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Registration failed');
+      }
+      
+      return response.json();
+    },
+
+    login: async (data: { email: string; password: string }): Promise<LoginResponse> => {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Login failed');
+      }
+
+      return response.json();
+    },
+
+    forgotPassword: async (data: { email: string }): Promise<ApiResponse<void>> => {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Password reset request failed');
+      }
+      
+      return result;
+    },
+
+    resetPassword: async (data: { token: string; newPassword: string }): Promise<ApiResponse<void>> => {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Password reset failed');
+      }
+      
+      return result;
+    },
+
+    verifyEmail: async (token: string): Promise<ApiResponse<void>> => {
+      const response = await fetch(`/api/auth/verify-email?token=${token}`);
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Email verification failed');
+      }
+      
+      return result;
+    },
+
+    loginWithVK: async (userId: string): Promise<AuthResponse> => {
       // Временная заглушка для тестирования
       return {
         user: {
-          id: '1',
+          id: userId,
           address: '0x123...abc',
-          username: userData.username
+          username: 'VK User',
+          email: 'vk@example.com',
+          role: 'user',
+          points: 0,
+          isEmailVerified: true
         }
       };
     },
-    
-    login: async (credentials: { email: string; password: string }): Promise<AuthResponse> => {
-      // Временная заглушка для тестирования
-      return {
-        user: {
-          id: '1',
-          address: '0x123...abc',
-          username: 'testuser'
-        }
-      };
+
+    checkToken: async (): Promise<AuthResponse> => {
+      const response = await fetch('/api/auth/check-token', {
+        headers: getHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Invalid token');
+      }
+
+      return response.json();
     }
   },
 

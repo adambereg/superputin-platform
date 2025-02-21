@@ -7,7 +7,10 @@ import notificationRoutes from './routes/notifications';
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // URL фронтенда
+  credentials: true
+}));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
