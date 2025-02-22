@@ -1,10 +1,12 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { ContentService } from '../content/ContentService';
 import { StorageService } from '../storage/StorageService';
 import { UserModel } from '../models/User';
-import { ContentType, ContentModel } from '../models/Content';
+import { ContentType, ContentModel, ModerationStatus } from '../models/Content';
 import { NotificationService } from '../notifications/NotificationService';
+import { requireAuth, requireRole } from '../middleware/authMiddleware';
+import { User } from '../models/User';
 
 const router = Router();
 const contentService = new ContentService();
@@ -18,6 +20,14 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB
   }
 });
+
+interface ModerateRequest extends Request {
+  user?: User;
+  body: {
+    status: ModerationStatus;
+    comment: string;
+  }
+}
 
 // Загрузка контента (мема или комикса)
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -228,5 +238,48 @@ router.get('/:contentId/likes', async (req, res) => {
     });
   }
 });
+
+// Маршрут для модерации контента
+router.post(
+  '/:contentId/moderate',
+  requireAuth,
+  requireRole('moderator'),
+  async (req: ModerateRequest, res: Response) => {
+    try {
+      const { status, comment } = req.body;
+      const content = await ContentModel.findById(req.params.contentId);
+      
+      if (!content) {
+        return res.status(404).json({ error: 'Контент не найден' });
+      }
+
+      if (!req.user) {
+        return res.status(401).json({ error: 'Пользователь не авторизован' });
+      }
+
+      content.moderationStatus = status;
+      content.moderationComment = comment;
+      content.moderatedBy = req.user.id;
+      content.moderatedAt = new Date();
+      
+      await content.save();
+
+      await UserModel.findByIdAndUpdate(req.user.id, {
+        $inc: {
+          [`moderationStats.${status === 'approved' ? 'approvedContent' : 'rejectedContent'}`]: 1
+        },
+        $set: {
+          'moderationStats.lastModeratedAt': new Date()
+        }
+      });
+
+      return res.json({ message: 'Модерация выполнена успешно' });
+    } catch (error) {
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Ошибка модерации' 
+      });
+    }
+  }
+);
 
 export default router; 

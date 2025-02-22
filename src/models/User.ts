@@ -6,7 +6,7 @@ export interface User extends Document {
   username: string;
   email: string;
   walletAddress: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'moderator' | 'admin';
   points: number;
   createdContent?: string[];
   ownedNFTs?: string[];
@@ -24,6 +24,14 @@ export interface User extends Document {
   twoFactorSecret: string;
   twoFactorToken: string | null;
   twoFactorTokenExpires: Date | null;
+  moderationStats: {
+    approvedContent: number;
+    rejectedContent: number;
+    lastModeratedAt: Date;
+  };
+  permissions: string[];
+  hasPermission(permission: string): boolean;
+  hasRole(role: string): boolean;
 }
 
 const userSchema = new Schema({
@@ -39,7 +47,11 @@ const userSchema = new Schema({
     type: String, 
     default: ''
   },
-  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  role: { 
+    type: String, 
+    enum: ['user', 'moderator', 'admin'], 
+    default: 'user' 
+  },
   points: { type: Number, default: 0 },
   createdContent: [{ type: Schema.Types.ObjectId, ref: 'Content' }],
   ownedNFTs: [{ type: String }],
@@ -71,7 +83,22 @@ const userSchema = new Schema({
   twoFactorTokenExpires: { 
     type: Date,
     default: null
-  }
+  },
+  moderationStats: {
+    approvedContent: { type: Number, default: 0 },
+    rejectedContent: { type: Number, default: 0 },
+    lastModeratedAt: Date
+  },
+  permissions: [{
+    type: String,
+    enum: [
+      'upload_content',
+      'moderate_content', 
+      'manage_users',
+      'manage_categories',
+      'view_analytics'
+    ]
+  }]
 }, {
   timestamps: true
 });
@@ -79,6 +106,18 @@ const userSchema = new Schema({
 // Метод для сравнения паролей
 userSchema.methods.comparePassword = async function(password: string): Promise<boolean> {
   return bcrypt.compare(password, this.passwordHash);
+};
+
+// Добавляем метод для проверки прав
+userSchema.methods.hasPermission = function(permission: string): boolean {
+  if (this.role === 'admin') return true;
+  return this.permissions.includes(permission);
+};
+
+// Добавляем метод для проверки роли
+userSchema.methods.hasRole = function(role: string): boolean {
+  if (this.role === 'admin') return true;
+  return this.role === role;
 };
 
 export const UserModel = mongoose.model<User>('User', userSchema);

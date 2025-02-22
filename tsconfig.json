@@ -23,9 +23,14 @@
     },
     "typeRoots": [
       "./node_modules/@types",
-      "./src/types"
-    ]
+      "./src/types",
+      "./src/@types"
+    ],
+    "types": ["node", "express"]
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*",
+    "src/types/**/*"
+  ],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }
