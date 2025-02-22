@@ -59,7 +59,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       throw new Error('Ошибка установки автора контента');
     }
 
-    res.json({
+    return res.json({
       message: 'Контент успешно загружен',
       content: {
         id: content.id,
@@ -71,7 +71,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка загрузки контента'
     });
   }
@@ -118,9 +118,9 @@ router.get('/:contentId', async (req, res) => {
       return res.status(404).json({ error: 'Контент не найден' });
     }
 
-    res.json({ content });
+    return res.json({ content });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка получения контента'
     });
   }
@@ -146,9 +146,9 @@ router.delete('/:contentId', async (req, res) => {
     }
 
     await content.deleteOne();
-    res.json({ message: 'Контент успешно удален' });
+    return res.json({ message: 'Контент успешно удален' });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка удаления контента'
     });
   }
@@ -194,14 +194,14 @@ router.post('/:contentId/like', async (req, res) => {
 
     await content.save();
 
-    res.json({
+    return res.json({
       message: hasLiked ? 'Лайк убран' : 'Лайк добавлен',
       likesCount: content.likesCount,
       hasLiked: !hasLiked
     });
 
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка обработки лайка'
     });
   }
@@ -217,13 +217,13 @@ router.get('/:contentId/likes', async (req, res) => {
       return res.status(404).json({ error: 'Контент не найден' });
     }
 
-    res.json({
+    return res.json({
       likesCount: content.likesCount,
       users: content.likes
     });
 
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       error: error instanceof Error ? error.message : 'Ошибка получения списка лайков'
     });
   }

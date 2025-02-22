@@ -7,7 +7,10 @@ import notificationRoutes from './routes/notifications';
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:5173', // URL фронтенда
+  credentials: true
+}));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -23,6 +26,20 @@ app.get('/api/env-test', (_req, res) => {
     mongodb: !!process.env.MONGODB_URL,
     r2: !!process.env.R2_BUCKET,
     ton: !!process.env.TON_NETWORK
+  });
+});
+
+// Базовый маршрут
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'SuperPutin Platform API',
+    version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      content: '/api/content',
+      notifications: '/api/notifications'
+    },
+    docs: 'https://github.com/yourusername/superputin-platform'
   });
 });
 
