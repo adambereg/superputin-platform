@@ -19,7 +19,8 @@ export const config = {
     from: process.env.EMAIL_FROM || 'noreply@superputin.com'
   },
   app: {
-    url: process.env.APP_URL || 'http://localhost:3000',
+    url: process.env.APP_URL || 'http://localhost:5173',
+    apiUrl: process.env.API_URL || 'http://localhost:3000/api',
     jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
     jwtExpiresIn: '7d'
   }

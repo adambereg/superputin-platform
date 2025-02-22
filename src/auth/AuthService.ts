@@ -8,22 +8,13 @@ import { Secret, SignOptions } from 'jsonwebtoken';
 import { VKAuthProvider } from './providers/VKAuthProvider';
 
 interface LoginResponse {
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    role: string;
-    points: number;
-    walletAddress: string;
-    isEmailVerified: boolean;
-    twoFactorEnabled: boolean;
-  };
+  user: User;
   token?: string;
   requiresTwoFactor?: boolean;
 }
 
 interface RegisterResponse {
-  success: boolean;
+  user: User;
   message: string;
 }
 
@@ -65,60 +56,51 @@ export class AuthService {
     return jwt.sign(payload, secret, options);
   }
 
-  async register(email: string, password: string, username: string): Promise<RegisterResponse> {
-    try {
-      // Проверяем уникальность email и username
-      const existingUser = await UserModel.findOne({
-        $or: [{ email }, { username }]
-      });
+  async register(data: { username: string; email: string; password: string }): Promise<RegisterResponse> {
+    // Проверяем существование пользователя
+    const existingUser = await UserModel.findOne({
+      $or: [{ email: data.email }, { username: data.username }]
+    });
 
-      if (existingUser) {
-        throw new Error('Email or username already exists');
-      }
-
-      // Хешируем пароль
-      const passwordSalt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, passwordSalt);
-      
-      // Генерируем токен подтверждения
-      const emailVerificationToken = this.generateToken();
-      const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      // Временный адрес кошелька для тестирования
-      const tempWalletAddress = '0x' + crypto.randomBytes(20).toString('hex');
-
-      // Создаем пользователя
-      await UserModel.create({
-        email,
-        username,
-        passwordHash,
-        passwordSalt,
-        emailVerificationToken,
-        emailVerificationExpires,
-        walletAddress: tempWalletAddress, // Используем временный адрес
-        points: 0,
-        role: 'user',
-        isEmailVerified: false,
-        authProvider: 'local'
-      });
-
-      // Отправляем письмо с подтверждением
-      await this.emailService.sendVerificationEmail(email, emailVerificationToken);
-
-      return { 
-        success: true, 
-        message: 'Registration successful. Please check your email to verify your account.' 
-      };
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
+    if (existingUser) {
+      throw new Error('User with this email or username already exists');
     }
+
+    // Генерируем соль и хэш пароля
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(data.password, salt);
+
+    // Генерируем токен для верификации email
+    const verificationToken = this.generateToken();
+    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 часа
+
+    // Генерируем временный адрес кошелька
+    const tempWalletAddress = `0x${crypto.randomBytes(20).toString('hex')}`;
+
+    // Создаем нового пользователя
+    const user = await UserModel.create({
+      ...data,
+      passwordHash,
+      passwordSalt: salt,
+      walletAddress: tempWalletAddress, // Используем временный адрес
+      isEmailVerified: false,
+      emailVerificationToken: verificationToken,
+      emailVerificationExpires: verificationExpires
+    });
+
+    // Отправляем письмо с верификацией
+    await this.emailService.sendVerificationEmail(data.email, verificationToken);
+
+    return {
+      user,
+      message: 'Registration successful. Please check your email to verify your account.'
+    };
   }
 
   async verifyEmail(token: string): Promise<void> {
     const user = await UserModel.findOne({
       emailVerificationToken: token,
-      emailVerificationExpires: { $gt: Date.now() }
+      emailVerificationExpires: { $gt: new Date() }
     });
 
     if (!user) {
@@ -132,59 +114,29 @@ export class AuthService {
   }
 
   async login(email: string, password: string): Promise<LoginResponse> {
-    try {
-      const user = await UserModel.findOne({ email });
-
-      if (!user) {
-        throw new Error('Invalid email or password');
-      }
-
-      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-      if (!isValidPassword) {
-        throw new Error('Invalid email or password');
-      }
-
-      // Временно отключаем проверку верификации email
-      // if (!user.isEmailVerified) {
-      //   throw new Error('Please verify your email before logging in');
-      // }
-
-      // Если у пользователя включена 2FA...
-      if (user.twoFactorEnabled) {
-        await this.send2FACode(email);
-        return {
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            role: user.role,
-            points: user.points,
-            walletAddress: user.walletAddress,
-            isEmailVerified: user.isEmailVerified,
-            twoFactorEnabled: true
-          },
-          requiresTwoFactor: true
-        };
-      }
-
-      const token = this.generateJWT(user);
-      return { 
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          points: user.points,
-          walletAddress: user.walletAddress,
-          isEmailVerified: user.isEmailVerified,
-          twoFactorEnabled: false
-        }, 
-        token 
-      };
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+    const user = await UserModel.findOne({ email });
+    if (!user) {
+      throw new Error('Invalid credentials');
     }
+
+    const isValidPassword = await user.comparePassword(password);
+    if (!isValidPassword) {
+      throw new Error('Invalid credentials');
+    }
+
+    // Проверяем верификацию email
+    if (!user.isEmailVerified) {
+      throw new Error('Please verify your email before logging in');
+    }
+
+    // Если включена 2FA
+    if (user.twoFactorEnabled) {
+      await this.send2FACode(email);
+      return { user, requiresTwoFactor: true };
+    }
+
+    const token = this.generateJWT(user);
+    return { user, token };
   }
 
   async requestPasswordReset(email: string): Promise<void> {
@@ -274,8 +226,15 @@ export class AuthService {
       return { success: false };
     }
 
+    // Проверяем наличие токена и срока его действия
+    if (!user.twoFactorToken || !user.twoFactorTokenExpires) {
+      console.log('No token or expiration date');
+      return { success: false };
+    }
+
     const isValid = user.twoFactorToken === token && 
                    user.twoFactorTokenExpires > new Date();
+    
     console.log('Token validation:', { 
       isValid,
       storedToken: user.twoFactorToken,

@@ -22,8 +22,8 @@ export interface User extends Document {
   comparePassword(password: string): Promise<boolean>;
   twoFactorEnabled: boolean;
   twoFactorSecret: string;
-  twoFactorToken: string;
-  twoFactorTokenExpires: Date;
+  twoFactorToken: string | null;
+  twoFactorTokenExpires: Date | null;
 }
 
 const userSchema = new Schema({
@@ -35,7 +35,10 @@ const userSchema = new Schema({
     lowercase: true,
     trim: true
   },
-  walletAddress: { type: String, required: true },
+  walletAddress: { 
+    type: String, 
+    default: ''
+  },
   role: { type: String, enum: ['user', 'admin'], default: 'user' },
   points: { type: Number, default: 0 },
   createdContent: [{ type: Schema.Types.ObjectId, ref: 'Content' }],
@@ -61,8 +64,14 @@ const userSchema = new Schema({
     default: false 
   },
   twoFactorSecret: String,
-  twoFactorToken: String,
-  twoFactorTokenExpires: Date
+  twoFactorToken: { 
+    type: String,
+    default: null
+  },
+  twoFactorTokenExpires: { 
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });

@@ -16,7 +16,16 @@ interface ApiResponse<T> {
 
 interface LoginResponse {
   user: User;
-  token: string;
+  token?: string;
+  requiresTwoFactor?: boolean;
+  message?: string;
+}
+
+interface TwoFactorResponse {
+  success: boolean;
+  token?: string;
+  message?: string;
+  error?: string;
 }
 
 const getHeaders = () => {
@@ -47,7 +56,9 @@ export const api = {
     login: async (data: { email: string; password: string }): Promise<LoginResponse> => {
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
-        headers: getHeaders(),
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(data)
       });
 
@@ -56,7 +67,14 @@ export const api = {
         throw new Error(errorData.error || 'Login failed');
       }
 
-      return response.json();
+      const result = await response.json();
+      
+      // Если требуется 2FA, отправляем код
+      if (result.requiresTwoFactor) {
+        await api.auth.send2FACode(data.email);
+      }
+
+      return result;
     },
 
     forgotPassword: async (data: { email: string }): Promise<ApiResponse<void>> => {
@@ -113,7 +131,8 @@ export const api = {
           email: 'vk@example.com',
           role: 'user',
           points: 0,
-          isEmailVerified: true
+          isEmailVerified: true,
+          twoFactorEnabled: false
         }
       };
     },
@@ -125,6 +144,55 @@ export const api = {
 
       if (!response.ok) {
         throw new Error('Invalid token');
+      }
+
+      return response.json();
+    },
+
+    enable2FA: async (userId: string): Promise<TwoFactorResponse> => {
+      const response = await fetch(`${API_URL}/auth/2fa/enable`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ userId })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to enable 2FA');
+      }
+
+      return response.json();
+    },
+
+    verify2FA: async (userId: string, code: string): Promise<TwoFactorResponse> => {
+      const response = await fetch(`${API_URL}/auth/2fa/verify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ userId, token: code })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to verify 2FA code');
+      }
+
+      return response.json();
+    },
+
+    send2FACode: async (email: string): Promise<ApiResponse<void>> => {
+      const response = await fetch(`${API_URL}/auth/2fa/send-code`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send 2FA code');
       }
 
       return response.json();

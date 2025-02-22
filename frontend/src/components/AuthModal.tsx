@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { api } from '../api/client';
 import { useUser } from '../contexts/UserContext';
@@ -107,6 +107,16 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setError(error instanceof Error ? error.message : 'An error occurred');
     }
   };
+
+  useEffect(() => {
+    // Проверяем URL параметры при монтировании
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('verified') === 'true') {
+      setSuccess('Email verified successfully. You can now log in.');
+    } else if (params.get('error') === 'verification-failed') {
+      setError('Email verification failed. Please try again or contact support.');
+    }
+  }, []);
 
   if (!isOpen) return null;
 

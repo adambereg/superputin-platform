@@ -3,6 +3,7 @@ import { AuthService } from '../auth/AuthService';
 import { UserModel } from '../models/User';
 import { body, validationResult } from 'express-validator';
 import { Request, Response } from 'express';
+import { config } from '../config/config';
 
 const router = Router();
 const authService = AuthService.getInstance();
@@ -20,11 +21,17 @@ router.post('/register', [
     }
 
     const { email, password, username } = req.body;
-    await authService.register(email, password, username);
+    const result = await authService.register({ email, password, username });
 
     return res.status(201).json({
       success: true,
-      message: 'Registration successful. Please check your email to verify your account.'
+      message: result.message,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        username: result.user.username,
+        isEmailVerified: result.user.isEmailVerified
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -49,6 +56,19 @@ router.get('/verify-email', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Email verification failed' 
     });
+  }
+});
+
+// Верификация email
+router.get('/verify-email/:token', async (req, res) => {
+  try {
+    await authService.verifyEmail(req.params.token);
+    
+    // После успешной верификации перенаправляем на фронтенд
+    res.redirect(`${config.app.url}/login?verified=true`);
+  } catch (error) {
+    // В случае ошибки перенаправляем на страницу с ошибкой
+    res.redirect(`${config.app.url}/login?error=verification-failed`);
   }
 });
 

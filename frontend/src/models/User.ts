@@ -8,4 +8,5 @@ export interface User {
   createdContent?: string[];
   ownedNFTs?: string[];
   isEmailVerified: boolean;
+  twoFactorEnabled: boolean;
 } 
