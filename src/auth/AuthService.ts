@@ -16,8 +16,10 @@ interface LoginResponse {
     points: number;
     walletAddress: string;
     isEmailVerified: boolean;
+    twoFactorEnabled: boolean;
   };
-  token: string;
+  token?: string;
+  requiresTwoFactor?: boolean;
 }
 
 interface RegisterResponse {
@@ -100,6 +102,9 @@ export class AuthService {
         authProvider: 'local'
       });
 
+      // Отправляем письмо с подтверждением
+      await this.emailService.sendVerificationEmail(email, emailVerificationToken);
+
       return { 
         success: true, 
         message: 'Registration successful. Please check your email to verify your account.' 
@@ -141,11 +146,28 @@ export class AuthService {
 
       // Временно отключаем проверку верификации email
       // if (!user.isEmailVerified) {
-      //   throw new Error('Please verify your email address');
+      //   throw new Error('Please verify your email before logging in');
       // }
 
-      const token = this.generateJWT(user);
+      // Если у пользователя включена 2FA...
+      if (user.twoFactorEnabled) {
+        await this.send2FACode(email);
+        return {
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            points: user.points,
+            walletAddress: user.walletAddress,
+            isEmailVerified: user.isEmailVerified,
+            twoFactorEnabled: true
+          },
+          requiresTwoFactor: true
+        };
+      }
 
+      const token = this.generateJWT(user);
       return { 
         user: {
           id: user.id,
@@ -154,7 +176,8 @@ export class AuthService {
           role: user.role,
           points: user.points,
           walletAddress: user.walletAddress,
-          isEmailVerified: user.isEmailVerified
+          isEmailVerified: user.isEmailVerified,
+          twoFactorEnabled: false
         }, 
         token 
       };
@@ -222,5 +245,76 @@ export class AuthService {
       console.error('VK auth error:', error);
       throw new Error('Ошибка аутентификации через VK');
     }
+  }
+
+  async enable2FA(userId: string): Promise<{ secret: string }> {
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Генерируем секретный токен
+    const twoFactorSecret = this.generateToken();
+    
+    user.twoFactorEnabled = true;
+    user.twoFactorSecret = twoFactorSecret;
+    await user.save();
+
+    return { secret: twoFactorSecret };
+  }
+
+  async verify2FAToken(userId: string, token: string): Promise<{ success: boolean; token?: string }> {
+    console.log('Verifying 2FA token:', { userId, token });
+    
+    const user = await UserModel.findById(userId);
+    console.log('Found user:', user?.email);
+    
+    if (!user || !user.twoFactorEnabled) {
+      console.log('User not found or 2FA not enabled');
+      return { success: false };
+    }
+
+    const isValid = user.twoFactorToken === token && 
+                   user.twoFactorTokenExpires > new Date();
+    console.log('Token validation:', { 
+      isValid,
+      storedToken: user.twoFactorToken,
+      expires: user.twoFactorTokenExpires
+    });
+    
+    if (isValid) {
+      const jwtToken = this.generateJWT(user);
+      console.log('Generated JWT token');
+      
+      await UserModel.findByIdAndUpdate(userId, {
+        $set: {
+          twoFactorToken: '',
+          twoFactorTokenExpires: new Date(0)
+        }
+      });
+      
+      return { 
+        success: true, 
+        token: jwtToken 
+      };
+    }
+
+    return { success: false };
+  }
+
+  async send2FACode(email: string): Promise<void> {
+    const user = await UserModel.findOne({ email });
+    if (!user || !user.twoFactorEnabled) {
+      throw new Error('User not found or 2FA not enabled');
+    }
+
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+    user.twoFactorToken = token;
+    user.twoFactorTokenExpires = expires;
+    await user.save();
+
+    await this.emailService.send2FACode(email, token);
   }
 } 

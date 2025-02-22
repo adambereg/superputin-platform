@@ -20,6 +20,10 @@ export interface User extends Document {
   resetPasswordToken: string | null;
   resetPasswordExpires: Date | null;
   comparePassword(password: string): Promise<boolean>;
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string;
+  twoFactorToken: string;
+  twoFactorTokenExpires: Date;
 }
 
 const userSchema = new Schema({
@@ -51,7 +55,14 @@ const userSchema = new Schema({
   emailVerificationToken: String,
   emailVerificationExpires: Date,
   resetPasswordToken: String,
-  resetPasswordExpires: Date
+  resetPasswordExpires: Date,
+  twoFactorEnabled: { 
+    type: Boolean, 
+    default: false 
+  },
+  twoFactorSecret: String,
+  twoFactorToken: String,
+  twoFactorTokenExpires: Date
 }, {
   timestamps: true
 });

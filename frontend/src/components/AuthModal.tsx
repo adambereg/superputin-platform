@@ -8,13 +8,53 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-type AuthMode = 'login' | 'register' | 'forgotPassword';
+type AuthMode = 'login' | 'register' | 'forgotPassword' | '2fa';
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const { login } = useUser();
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [tempUserId, setTempUserId] = useState<string | null>(null);
+
+  const handleVerify2FA = async () => {
+    console.log('handleVerify2FA called with code:', twoFactorCode);
+    try {
+      setError('');
+      console.log('Verifying 2FA code:', { userId: tempUserId, code: twoFactorCode });
+      
+      const verifyResult = await api.auth.verify2FA(tempUserId!, twoFactorCode);
+      console.log('Verify result:', verifyResult);
+      
+      if (verifyResult.success && verifyResult.token) {
+        // Получаем сохраненные данные пользователя
+        const userStr = localStorage.getItem('tempUser');
+        if (!userStr) {
+          throw new Error('User data not found');
+        }
+        
+        const user = JSON.parse(userStr);
+        console.log('Logging in user:', user);
+        
+        // Выполняем вход
+        login(user);
+        localStorage.setItem('token', verifyResult.token);
+        
+        // Очищаем временные данные
+        localStorage.removeItem('tempEmail');
+        localStorage.removeItem('tempPassword');
+        localStorage.removeItem('tempUser');
+        
+        onClose();
+      } else {
+        setError('Verification failed');
+      }
+    } catch (err) {
+      console.error('2FA verification error:', err);
+      setError(err instanceof Error ? err.message : 'Invalid verification code');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -25,16 +65,27 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     
     try {
       if (mode === 'login') {
-        const response = await api.auth.login({
-          email: formData.get('email') as string,
-          password: formData.get('password') as string
+        const email = formData.get('email') as string;
+        const password = formData.get('password') as string;
+
+        const result = await api.auth.login({
+          email,
+          password
         });
-        
-        if (response.user) {
-          login(response.user);
-          localStorage.setItem('token', response.token);
-          onClose();
+
+        if (result.requiresTwoFactor) {
+          // Сохраняем учетные данные временно
+          localStorage.setItem('tempEmail', email);
+          localStorage.setItem('tempPassword', password);
+          localStorage.setItem('tempUser', JSON.stringify(result.user));
+          setTempUserId(result.user.id);
+          setMode('2fa');
+          return;
         }
+
+        login(result.user);
+        localStorage.setItem('token', result.token!);
+        onClose();
       } else if (mode === 'register') {
         const result = await api.auth.register({
           username: formData.get('username') as string,
@@ -51,13 +102,52 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         
         setSuccess(result.message || 'Password reset email sent');
       }
-    } catch (err) {
-      console.error('Auth error:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (error) {
+      console.error('Auth error:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
     }
   };
 
   if (!isOpen) return null;
+
+  if (mode === '2fa') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative bg-background p-6 rounded-lg shadow-xl max-w-md w-full">
+          <h2 className="font-poppins font-bold text-2xl mb-4">
+            Two-Factor Authentication
+          </h2>
+          {error && (
+            <div className="bg-red-50 text-red-500 p-3 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+          <p className="text-text/70 mb-4">
+            Please enter the verification code sent to your email
+          </p>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleVerify2FA();
+          }}>
+            <input
+              type="text"
+              value={twoFactorCode}
+              onChange={(e) => setTwoFactorCode(e.target.value)}
+              placeholder="Enter code"
+              className="w-full px-4 py-2 rounded-lg border border-text/10 bg-text/5 mb-4"
+            />
+            <button
+              type="submit"
+              className="w-full bg-primary text-white py-2 rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Verify
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">

@@ -53,29 +53,29 @@ router.get('/verify-email', async (req: Request, res: Response) => {
 });
 
 // Вход
-router.post('/login', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').exists()
-], async (req: Request, res: Response) => {
+router.post('/login', async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+    const { email, password } = req.body;
+    const result = await authService.login(email, password);
+
+    // Если требуется 2FA
+    if (result.requiresTwoFactor) {
+      return res.json({
+        requiresTwoFactor: true,
+        user: result.user,
+        message: 'Please check your email for verification code'
+      });
     }
 
-    const { email, password } = req.body;
-    const { user, token } = await authService.login(email, password);
-
+    // Если 2FA не требуется или уже пройдена
     return res.json({
-      success: true,
-      message: 'Login successful',
-      data: { user, token }
+      user: result.user,
+      token: result.token,
+      message: 'Login successful'
     });
   } catch (error) {
-    console.error('Login error:', error);
-    return res.status(401).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Login failed'
+    return res.status(401).json({ 
+      error: error instanceof Error ? error.message : 'Login failed' 
     });
   }
 });
@@ -209,6 +209,64 @@ router.post('/vk', async (req, res) => {
   } catch (error) {
     res.status(401).json({ 
       error: error instanceof Error ? error.message : 'VK auth failed' 
+    });
+  }
+});
+
+// Включение 2FA
+router.post('/2fa/enable', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const result = await authService.enable2FA(userId);
+    res.json({ success: true, secret: result.secret });
+  } catch (error) {
+    res.status(400).json({ 
+      error: error instanceof Error ? error.message : 'Failed to enable 2FA' 
+    });
+  }
+});
+
+// Отправка 2FA кода
+router.post('/2fa/send-code', async (req, res) => {
+  try {
+    const { email } = req.body;
+    await authService.send2FACode(email);
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent to your email' 
+    });
+  } catch (error) {
+    res.status(400).json({ 
+      error: error instanceof Error ? error.message : 'Failed to send 2FA code' 
+    });
+  }
+});
+
+// Проверка 2FA кода
+router.post('/2fa/verify', async (req, res) => {
+  try {
+    const { userId, token } = req.body;
+    const result = await authService.verify2FAToken(userId, token);
+    
+    if (!result.success) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid or expired token' 
+      });
+    }
+
+    // Добавляем токен в ответ
+    return res.json({ 
+      success: true, 
+      message: 'Token verified successfully',
+      token: result.token // Убедитесь, что токен передается в ответе
+    });
+
+  } catch (error) {
+    console.error('2FA verification error:', error);
+    return res.status(400).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to verify token' 
     });
   }
 });
