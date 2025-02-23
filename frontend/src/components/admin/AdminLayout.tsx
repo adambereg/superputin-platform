@@ -19,47 +19,51 @@ export function AdminLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Боковая панель */}
-      <div className="w-64 bg-white border-r border-gray-200">
-        <div className="p-6">
-          <h2 className="font-poppins font-bold text-xl text-primary">
-            Админ-панель
-          </h2>
-          <p className="text-sm text-gray-500 mt-1">
-            {user?.username}
-          </p>
-        </div>
-
-        <nav className="mt-6">
-          {navItems.map(item => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/admin'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-6 py-3 text-gray-600 hover:bg-gray-50 transition-colors ${
-                  isActive ? 'text-primary border-r-2 border-primary bg-primary/5' : ''
-                }`
-              }
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-6 py-3 text-red-500 hover:bg-red-50 transition-colors w-full mt-6"
+    <div className="flex min-h-screen">
+      {/* Боковое меню */}
+      <div className="w-64 bg-white border-r">
+        <nav className="p-4 space-y-2">
+          <NavLink 
+            to="/admin" 
+            end
+            className={({ isActive }) => 
+              `flex items-center gap-2 p-2 rounded ${
+                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`
+            }
           >
-            <LogOut size={20} />
-            <span>Выйти</span>
-          </button>
+            <LayoutDashboard size={20} />
+            <span>Дашборд</span>
+          </NavLink>
+          
+          <NavLink 
+            to="/admin/users"
+            className={({ isActive }) => 
+              `flex items-center gap-2 p-2 rounded ${
+                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`
+            }
+          >
+            <Users size={20} />
+            <span>Пользователи</span>
+          </NavLink>
+          
+          <NavLink 
+            to="/admin/content"
+            className={({ isActive }) => 
+              `flex items-center gap-2 p-2 rounded ${
+                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`
+            }
+          >
+            <FileText size={20} />
+            <span>Контент</span>
+          </NavLink>
         </nav>
       </div>
 
       {/* Основной контент */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 p-6 bg-gray-50">
         <Outlet />
       </div>
     </div>

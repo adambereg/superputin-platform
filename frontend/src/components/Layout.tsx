@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, Navigate, useLocation } from 'react-router-dom';
-import { Menu, Sun, Moon, Wallet, X } from 'lucide-react';
+import { Menu, Sun, Moon, Wallet, X, Shield } from 'lucide-react';
 import { useTonConnectUI } from '@tonconnect/ui-react';
 import { AuthModal } from './AuthModal';
 import { useUser } from '../contexts/UserContext';
@@ -38,6 +38,15 @@ export function Layout() {
               <Link to="/comics" className="hover:text-primary transition-colors">Comics</Link>
               <Link to="/memes" className="hover:text-primary transition-colors">Memes</Link>
               <Link to="/nfts" className="hover:text-primary transition-colors">NFTs</Link>
+              {user?.role === 'admin' && (
+                <Link 
+                  to="/admin"
+                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Shield size={20} />
+                  <span>Админ-панель</span>
+                </Link>
+              )}
               <button
                 onClick={() => setIsDark(!isDark)}
                 className="p-2 hover:bg-text/5 rounded-full"
@@ -89,6 +98,15 @@ export function Layout() {
             <Link to="/comics" className="block py-2 hover:text-primary">Comics</Link>
             <Link to="/memes" className="block py-2 hover:text-primary">Memes</Link>
             <Link to="/nfts" className="block py-2 hover:text-primary">NFTs</Link>
+            {user?.role === 'admin' && (
+              <Link 
+                to="/admin" 
+                className="flex items-center gap-2 py-2 text-primary hover:text-primary/80"
+              >
+                <Shield size={20} />
+                <span>Админ-панель</span>
+              </Link>
+            )}
           </div>
         </div>
       )}
