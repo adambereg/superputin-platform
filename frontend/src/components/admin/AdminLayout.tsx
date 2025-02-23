@@ -1,10 +1,10 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 
 export function AdminLayout() {
-  const { user, logout } = useUser();
+  const { logout } = useUser();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -12,60 +12,65 @@ export function AdminLayout() {
     navigate('/');
   };
 
-  const navItems = [
-    { path: '/admin', icon: <LayoutDashboard size={20} />, label: 'Панель управления' },
-    { path: '/admin/users', icon: <Users size={20} />, label: 'Пользователи' },
-    { path: '/admin/content', icon: <FileText size={20} />, label: 'Контент' }
-  ];
-
   return (
-    <div className="flex min-h-screen">
-      {/* Боковое меню */}
-      <div className="w-64 bg-white border-r">
+    <div className="min-h-screen flex bg-gray-50">
+      {/* Боковая панель */}
+      <aside className="w-64 bg-white shadow-sm">
+        <div className="p-4 border-b">
+          <h1 className="text-xl font-bold text-primary">Админ-панель</h1>
+        </div>
+        
         <nav className="p-4 space-y-2">
           <NavLink 
             to="/admin" 
             end
-            className={({ isActive }) => 
-              `flex items-center gap-2 p-2 rounded ${
-                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`
-            }
+            className={({ isActive }) => `
+              flex items-center gap-3 px-4 py-2 rounded-lg transition-colors
+              ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}
+            `}
           >
             <LayoutDashboard size={20} />
             <span>Дашборд</span>
           </NavLink>
-          
+
           <NavLink 
             to="/admin/users"
-            className={({ isActive }) => 
-              `flex items-center gap-2 p-2 rounded ${
-                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`
-            }
+            className={({ isActive }) => `
+              flex items-center gap-3 px-4 py-2 rounded-lg transition-colors
+              ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}
+            `}
           >
             <Users size={20} />
             <span>Пользователи</span>
           </NavLink>
-          
+
           <NavLink 
             to="/admin/content"
-            className={({ isActive }) => 
-              `flex items-center gap-2 p-2 rounded ${
-                isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'
-              }`
-            }
+            className={({ isActive }) => `
+              flex items-center gap-3 px-4 py-2 rounded-lg transition-colors
+              ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}
+            `}
           >
             <FileText size={20} />
             <span>Контент</span>
           </NavLink>
         </nav>
-      </div>
+
+        <div className="absolute bottom-0 w-64 p-4 border-t">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-2 w-full text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut size={20} />
+            <span>Выйти</span>
+          </button>
+        </div>
+      </aside>
 
       {/* Основной контент */}
-      <div className="flex-1 p-6 bg-gray-50">
+      <main className="flex-1 p-8">
         <Outlet />
-      </div>
+      </main>
     </div>
   );
 } 

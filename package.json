@@ -11,7 +11,10 @@
     "build": "rm -rf dist && tsc -p tsconfig.server.json",
     "start": "node dist/server.js",
     "vercel-build": "echo 'Build step skipped - using @vercel/node'",
-    "create-admin": "ts-node -r dotenv/config src/scripts/createAdmin.ts"
+    "create-admin": "ts-node -r dotenv/config src/scripts/createAdmin.ts",
+    "check-admin": "ts-node -r dotenv/config src/scripts/checkAdmin.ts",
+    "update-admin": "ts-node -r dotenv/config src/scripts/updateAdmin.ts",
+    "force-update-admin": "ts-node -r dotenv/config src/scripts/forceUpdateAdmin.ts"
   },
   "dependencies": {
     "@tonclient/core": "^1.30.0",
