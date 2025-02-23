@@ -38,8 +38,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         console.log('Logging in user:', user);
         
         // Выполняем вход
-        login(user);
-        localStorage.setItem('token', verifyResult.token);
+        login(user, verifyResult.token);
         
         // Очищаем временные данные
         localStorage.removeItem('tempEmail');
@@ -65,27 +64,23 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     
     try {
       if (mode === 'login') {
-        const email = formData.get('email') as string;
-        const password = formData.get('password') as string;
+        const loginData = {
+          email: formData.get('email') as string,
+          password: formData.get('password') as string
+        };
 
-        const result = await api.auth.login({
-          email,
-          password
-        });
-
+        const result = await api.auth.login(loginData);
+        
         if (result.requiresTwoFactor) {
-          // Сохраняем учетные данные временно
-          localStorage.setItem('tempEmail', email);
-          localStorage.setItem('tempPassword', password);
-          localStorage.setItem('tempUser', JSON.stringify(result.user));
           setTempUserId(result.user.id);
           setMode('2fa');
           return;
         }
 
-        login(result.user);
-        localStorage.setItem('token', result.token!);
-        onClose();
+        if (result.token) {
+          login(result.user, result.token);
+          onClose();
+        }
       } else if (mode === 'register') {
         const result = await api.auth.register({
           username: formData.get('username') as string,

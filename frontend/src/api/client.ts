@@ -200,6 +200,17 @@ export const api = {
       }
 
       return response.json();
+    },
+
+    verify: async (): Promise<{ success: boolean }> => {
+      try {
+        const response = await fetch(`${API_URL}/auth/verify`, {
+          headers: getHeaders()
+        });
+        return response.json();
+      } catch (error) {
+        return { success: false };
+      }
     }
   },
 

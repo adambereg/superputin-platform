@@ -5,6 +5,8 @@ import { body, validationResult } from 'express-validator';
 import { Request, Response } from 'express';
 import { config } from '../config/config';
 import bcrypt from 'bcryptjs';
+import { requireAuth, requireRole } from '../middleware/authMiddleware';
+import { AuthRequest } from '../types/express';
 
 const router = Router();
 const authService = AuthService.getInstance();
@@ -391,6 +393,41 @@ router.get('/check-users', async (_req, res) => {
     console.error('Check users error:', error);
     return res.status(500).json({ 
       error: 'Check failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+router.get('/verify', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false });
+    }
+    return res.json({ 
+      success: true,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        username: req.user.username,
+        role: req.user.role
+      }
+    });
+  } catch (error) {
+    return res.status(401).json({ success: false });
+  }
+});
+
+// Добавляем защищенный маршрут для админа
+router.get('/users', requireAuth, requireRole('admin'), async (_req, res) => {
+  try {
+    const users = await UserModel.find()
+      .select('-passwordHash -passwordSalt')
+      .lean();
+    
+    return res.json({ users });
+  } catch (error) {
+    return res.status(500).json({ 
+      error: 'Failed to fetch users',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
