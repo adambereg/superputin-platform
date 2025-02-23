@@ -4,6 +4,7 @@ import { UserModel } from '../models/User';
 import { body, validationResult } from 'express-validator';
 import { Request, Response } from 'express';
 import { config } from '../config/config';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 const authService = AuthService.getInstance();
@@ -73,29 +74,42 @@ router.get('/verify-email/:token', async (req, res) => {
 });
 
 // Вход
-router.post('/login', async (req, res) => {
+router.post('/login', [
+  body('email').isEmail(),
+  body('password').exists()
+], async (req: Request, res: Response) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     const { email, password } = req.body;
-    const result = await authService.login(email, password);
+    const result = await authService.login({ email, password });
 
     // Если требуется 2FA
     if (result.requiresTwoFactor) {
       return res.json({
         requiresTwoFactor: true,
-        user: result.user,
-        message: 'Please check your email for verification code'
+        user: {
+          id: result.user.id,
+          email: result.user.email
+        }
       });
     }
 
-    // Если 2FA не требуется или уже пройдена
     return res.json({
-      user: result.user,
-      token: result.token,
-      message: 'Login successful'
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role
+      },
+      token: result.token
     });
   } catch (error) {
-    return res.status(401).json({ 
-      error: error instanceof Error ? error.message : 'Login failed' 
+    console.error('Login error:', error);
+    return res.status(401).json({
+      error: error instanceof Error ? error.message : 'Authentication failed'
     });
   }
 });
@@ -139,18 +153,16 @@ router.post('/reset-password', [
   }
 });
 
+// Тестовый маршрут для проверки базы данных
 router.get('/test-db', async (_req, res) => {
   try {
-    const count = await UserModel.countDocuments();
+    const userCount = await UserModel.countDocuments();
     res.json({ 
       message: 'База данных подключена',
-      userCount: count
+      userCount 
     });
   } catch (error) {
-    res.status(500).json({ 
-      error: 'Ошибка подключения к базе данных',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    res.status(500).json({ error: 'Database error' });
   }
 });
 
@@ -287,6 +299,99 @@ router.post('/2fa/verify', async (req, res) => {
     return res.status(400).json({ 
       success: false,
       error: error instanceof Error ? error.message : 'Failed to verify token' 
+    });
+  }
+});
+
+// Обновите маршрут check-admin
+router.get('/check-admin', async (_req, res) => {
+  try {
+    const admin = await UserModel.findOne({ email: 'admin@example.com' }).lean();
+    console.log('Raw admin data:', admin);
+    
+    if (!admin) {
+      return res.json({ 
+        exists: false,
+        message: 'Admin not found' 
+      });
+    }
+
+    // Если роль не admin, попробуем обновить
+    if (admin.role !== 'admin') {
+      console.log('Admin role is not set, attempting to update...');
+      
+      const updatedAdmin = await UserModel.findOneAndUpdate(
+        { email: 'admin@example.com' },
+        {
+          $set: {
+            role: 'admin',
+            permissions: [
+              'upload_content',
+              'moderate_content',
+              'manage_users',
+              'manage_categories',
+              'view_analytics'
+            ]
+          }
+        },
+        { new: true }
+      );
+      
+      console.log('Updated admin:', updatedAdmin);
+    }
+
+    // Проверяем пароль
+    const isValidPassword = await bcrypt.compare('admin123', admin.passwordHash);
+    
+    return res.json({
+      exists: true,
+      role: admin.role,
+      passwordValid: isValidPassword,
+      hasPasswordHash: !!admin.passwordHash,
+      permissions: admin.permissions
+    });
+  } catch (error) {
+    console.error('Check admin error:', error);
+    return res.status(500).json({ 
+      error: 'Check failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Добавьте новый маршрут для проверки всех пользователей
+router.get('/check-users', async (_req, res) => {
+  try {
+    // Используем lean() для получения чистых объектов
+    const users = await UserModel.find().lean().select('email role passwordHash username permissions');
+    console.log('Raw users data:', users);
+    
+    // Проверяем админа отдельно с lean()
+    const admin = await UserModel.findOne({ email: 'admin@example.com' }).lean();
+    console.log('Raw admin data:', admin);
+    
+    return res.json({
+      count: users.length,
+      users: users.map(user => ({
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        username: user.username,
+        hasPasswordHash: !!user.passwordHash,
+        permissions: user.permissions
+      })),
+      adminDetails: admin ? {
+        id: admin._id,
+        email: admin.email,
+        role: admin.role,
+        permissions: admin.permissions
+      } : null
+    });
+  } catch (error) {
+    console.error('Check users error:', error);
+    return res.status(500).json({ 
+      error: 'Check failed',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });

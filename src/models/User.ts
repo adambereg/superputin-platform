@@ -50,7 +50,8 @@ const userSchema = new Schema({
   role: { 
     type: String, 
     enum: ['user', 'moderator', 'admin'], 
-    default: 'user' 
+    default: 'user',
+    required: true
   },
   points: { type: Number, default: 0 },
   createdContent: [{ type: Schema.Types.ObjectId, ref: 'Content' }],
@@ -97,7 +98,8 @@ const userSchema = new Schema({
       'manage_users',
       'manage_categories',
       'view_analytics'
-    ]
+    ],
+    required: true
   }]
 }, {
   timestamps: true
@@ -105,7 +107,13 @@ const userSchema = new Schema({
 
 // Метод для сравнения паролей
 userSchema.methods.comparePassword = async function(password: string): Promise<boolean> {
-  return bcrypt.compare(password, this.passwordHash);
+  console.log('Comparing passwords:', {
+    provided: password,
+    hasHash: !!this.passwordHash
+  });
+  const result = await bcrypt.compare(password, this.passwordHash);
+  console.log('Compare result:', result);
+  return result;
 };
 
 // Добавляем метод для проверки прав
@@ -119,5 +127,19 @@ userSchema.methods.hasRole = function(role: string): boolean {
   if (this.role === 'admin') return true;
   return this.role === role;
 };
+
+// Добавляем pre-save middleware для проверки роли админа
+userSchema.pre('save', function(next) {
+  if (this.role === 'admin' && (!this.permissions || this.permissions.length === 0)) {
+    this.permissions = [
+      'upload_content',
+      'moderate_content',
+      'manage_users',
+      'manage_categories',
+      'view_analytics'
+    ];
+  }
+  next();
+});
 
 export const UserModel = mongoose.model<User>('User', userSchema);

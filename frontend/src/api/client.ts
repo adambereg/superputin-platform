@@ -59,17 +59,21 @@ export const api = {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify(data)
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Login failed');
+        throw new Error(errorData.error || 'Invalid credentials');
       }
 
       const result = await response.json();
       
-      // Если требуется 2FA, отправляем код
+      if (result.token) {
+        localStorage.setItem('token', result.token);
+      }
+      
       if (result.requiresTwoFactor) {
         await api.auth.send2FACode(data.email);
       }
@@ -241,6 +245,41 @@ export const api = {
     markAsRead: (notificationId: string) =>
       fetch(`${API_URL}/notifications/${notificationId}/read`, {
         method: 'POST'
+      }).then(res => res.json())
+  },
+
+  admin: {
+    getStats: () => 
+      fetch(`${API_URL}/admin/stats`, {
+        headers: getHeaders()
+      }).then(res => res.json()),
+    
+    getUsers: (params: { page?: number; limit?: number; search?: string }) =>
+      fetch(`${API_URL}/admin/users?${new URLSearchParams(params as any)}`, {
+        headers: getHeaders()
+      }).then(res => res.json()),
+    
+    updateUserRole: (userId: string, role: string) =>
+      fetch(`${API_URL}/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ role })
+      }).then(res => res.json()),
+    
+    getContent: (params: { 
+      page?: number; 
+      limit?: number; 
+      status?: string;
+      type?: string;
+    }) =>
+      fetch(`${API_URL}/admin/content?${new URLSearchParams(params as any)}`, {
+        headers: getHeaders()
+      }).then(res => res.json()),
+    
+    deleteContent: (contentId: string) =>
+      fetch(`${API_URL}/admin/content/${contentId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
       }).then(res => res.json())
   }
 };

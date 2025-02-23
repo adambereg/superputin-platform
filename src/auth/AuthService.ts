@@ -18,6 +18,11 @@ interface RegisterResponse {
   message: string;
 }
 
+interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
 export class AuthService {
   private static instance: AuthService;
   private emailService: EmailService;
@@ -47,12 +52,14 @@ export class AuthService {
     const payload = { 
       id: user.id, 
       email: user.email, 
-      role: user.role 
-    };
-    const options: SignOptions = { 
-      expiresIn: parseInt(config.app.jwtExpiresIn) || '7d' // Либо число секунд, либо строка
+      role: user.role,
+      permissions: user.permissions
     };
     
+    const options: SignOptions = {
+      expiresIn: 604800 // 7 дней в секундах
+    };
+
     return jwt.sign(payload, secret, options);
   }
 
@@ -113,26 +120,38 @@ export class AuthService {
     await user.save();
   }
 
-  async login(email: string, password: string): Promise<LoginResponse> {
-    const user = await UserModel.findOne({ email });
+  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    const user = await UserModel.findOne({ email: credentials.email });
+    
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new Error('User not found');
     }
 
-    const isValidPassword = await user.comparePassword(password);
+    // Проверяем и обновляем роль админа при входе
+    if (user.email === 'admin@example.com' && user.role !== 'admin') {
+      console.log('Updating admin role during login...');
+      user.role = 'admin';
+      user.permissions = [
+        'upload_content',
+        'moderate_content',
+        'manage_users',
+        'manage_categories',
+        'view_analytics'
+      ];
+      await user.save();
+    }
+
+    const isValidPassword = await user.comparePassword(credentials.password);
     if (!isValidPassword) {
-      throw new Error('Invalid credentials');
+      throw new Error('Invalid password');
     }
 
-    // Проверяем верификацию email
-    if (!user.isEmailVerified) {
-      throw new Error('Please verify your email before logging in');
-    }
-
-    // Если включена 2FA
     if (user.twoFactorEnabled) {
-      await this.send2FACode(email);
-      return { user, requiresTwoFactor: true };
+      await this.send2FACode(user.email);
+      return {
+        user,
+        requiresTwoFactor: true
+      };
     }
 
     const token = this.generateJWT(user);

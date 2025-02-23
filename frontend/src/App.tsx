@@ -5,6 +5,11 @@ import { UserProvider } from './contexts/UserContext';
 import { Layout } from './components';
 import { Home, Comics, ComicDetails, Memes, NFTs } from './pages';
 import bridge from '@vkontakte/vk-bridge';
+import { AdminDashboard } from './pages/admin/Dashboard';
+import { UsersManagement } from './pages/admin/Users';
+import { ContentManagement } from './pages/admin/Content';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   useEffect(() => {
@@ -23,6 +28,18 @@ function App() {
               <Route path="comics/:id" element={<ComicDetails />} />
               <Route path="memes" element={<Memes />} />
               <Route path="nfts" element={<NFTs />} />
+            </Route>
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AdminDashboard />} />
+              <Route path="users" element={<UsersManagement />} />
+              <Route path="content" element={<ContentManagement />} />
             </Route>
           </Routes>
         </BrowserRouter>
