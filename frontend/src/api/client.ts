@@ -277,6 +277,21 @@ export const api = {
         body: JSON.stringify({ role })
       }).then(res => res.json()),
     
+    deleteUser: async (userId: string) => {
+      const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
+      
+      return data;
+    },
+    
     getContent: (params: { 
       page?: number; 
       limit?: number; 
