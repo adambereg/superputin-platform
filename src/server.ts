@@ -5,9 +5,34 @@ import authRoutes from './routes/auth';
 import contentRoutes from './routes/content';
 import notificationRoutes from './routes/notifications';
 import adminRoutes from './routes/admin';
+import path from 'path';
 
 const app = express();
-app.use(express.json());
+
+// Создаем middleware для JSON
+const jsonParser = express.json({ limit: '50mb' });
+
+// Middleware для обработки разных типов контента
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  
+  if (contentType.includes('application/json')) {
+    jsonParser(req, res, next);
+  } else if (contentType.includes('multipart/form-data')) {
+    next();
+  } else {
+    express.urlencoded({ limit: '50mb', extended: true })(req, res, next);
+  }
+});
+
+// Обработка ошибок парсинга
+app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof SyntaxError && 'body' in err) {
+    return res.status(400).json({ error: 'Invalid request body' });
+  }
+  return next(err);
+});
+
 app.use(cors({
   origin: 'http://localhost:5173', // URL фронтенда
   credentials: true
@@ -49,6 +74,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Добавляем раздачу статических файлов
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 async function startServer() {
   try {

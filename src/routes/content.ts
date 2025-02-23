@@ -1,23 +1,38 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { ContentService } from '../content/ContentService';
-import { StorageService } from '../storage/StorageService';
-import { UserModel } from '../models/User';
-import { ContentType, ContentModel, ModerationStatus } from '../models/Content';
+import { ContentModel, ModerationStatus } from '../models/Content';
 import { NotificationService } from '../notifications/NotificationService';
 import { requireAuth, requireRole } from '../middleware/authMiddleware';
-import { User } from '../models/User';
+import { User, UserModel } from '../models/User';
+import { StorageService } from '../storage/StorageService';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
 
 const router = Router();
-const contentService = new ContentService();
-const storageService = new StorageService();
 const notificationService = NotificationService.getInstance();
+const storageService = new StorageService();
 
-// Настройка multer для загрузки файлов
+// Настраиваем multer для загрузки файлов
+const storage = multer.diskStorage({
+  destination: 'uploads/',
+  filename: (_req, file, cb) => {
+    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  }
+});
+
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
+    fileSize: 50 * 1024 * 1024 // 50MB
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Неподдерживаемый формат файла') as any);
+    }
   }
 });
 
@@ -30,59 +45,46 @@ interface ModerateRequest extends Request {
 }
 
 // Загрузка контента (мема или комикса)
-router.post('/upload', upload.single('file'), async (req, res) => {
+router.post('/upload', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
   try {
-    const { userId, type, title } = req.body;
-    const file = req.file;
-
-    if (!file) {
+    if (!req.file) {
       return res.status(400).json({ error: 'Файл не загружен' });
     }
 
-    // Проверяем тип контента
-    if (!['meme', 'comic', 'nft'].includes(type)) {
-      return res.status(400).json({ error: 'Неверный тип контента' });
+    // Получаем данные из form-data напрямую
+    const title = req.body.title;
+    const type = req.body.type;
+
+    if (!title || !type) {
+      return res.status(400).json({ error: 'Не указаны обязательные поля' });
     }
 
-    // Получаем пользователя
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
+    const fileUrl = `${process.env.API_URL || 'http://localhost:3000'}/uploads/${req.file.filename}`;
 
-    // Загружаем файл в R2
-    const fileName = `${Date.now()}-${file.originalname}`;
-    const fileUrl = await storageService.uploadFile(file.buffer, fileName);
-
-    // Создаем контент
-    const content = await contentService.uploadContent(user, {
-      buffer: file.buffer,
-      originalname: file.originalname,
-      mimetype: file.mimetype
-    }, type as ContentType, {
+    const content = await ContentModel.create({
       title,
-      fileUrl
-    });
-
-    // Проверяем, что authorId установлен
-    if (!content.authorId) {
-      throw new Error('Ошибка установки автора контента');
-    }
-
-    return res.json({
-      message: 'Контент успешно загружен',
-      content: {
-        id: content.id,
-        title: content.title,
-        type: content.type,
-        fileUrl: content.fileUrl,
-        authorId: content.authorId
+      type,
+      fileUrl,
+      authorId: (req as any).user?._id,
+      moderationStatus: 'pending',
+      metadata: {
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype
       }
     });
 
+    await content.populate('authorId', 'username email');
+
+    return res.json({
+      success: true,
+      content
+    });
   } catch (error) {
+    console.error('Upload error:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка загрузки контента'
+      error: 'Ошибка при загрузке файла',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
@@ -137,19 +139,19 @@ router.get('/:contentId', async (req, res) => {
 });
 
 // Удаление контента
-router.delete('/:contentId', async (req, res) => {
+router.delete('/:contentId', requireAuth, async (req: Request, res: Response) => {
   try {
     const content = await ContentModel.findById(req.params.contentId);
     if (!content) {
       return res.status(404).json({ error: 'Контент не найден' });
     }
 
-    // Проверяем права (временно отключено)
-    // if (content.authorId.toString() !== req.user.id) {
-    //   return res.status(403).json({ error: 'Нет прав на удаление' });
-    // }
+    // Проверяем права
+    if (content.authorId.toString() !== (req as any).user?.id && (req as any).user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Нет прав на удаление' });
+    }
 
-    // Удаляем файл из R2
+    // Удаляем файл
     const fileName = content.fileUrl.split('/').pop();
     if (fileName) {
       await storageService.deleteFile(fileName);
