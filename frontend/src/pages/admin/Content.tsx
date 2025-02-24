@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 import { Search, Eye, Trash2, AlertCircle, Filter } from 'lucide-react';
+import { UploadContent } from '../../components/UploadContent';
 
 interface Content {
   _id: string;
@@ -59,13 +60,34 @@ export function ContentManagement() {
   };
 
   const handleDelete = async (contentId: string) => {
-    if (window.confirm('Вы уверены, что хотите удалить этот контент?')) {
-      try {
-        await api.admin.deleteContent(contentId);
-        setContent(content.filter(item => item._id !== contentId));
-      } catch (err) {
-        setError('Ошибка удаления контента');
+    try {
+      const token = localStorage.getItem('token');
+      console.log('Deleting content:', contentId);
+      
+      const response = await fetch(`http://localhost:3000/api/content/${contentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Delete response status:', response.status);
+      const data = await response.json();
+      console.log('Delete response data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || `Ошибка удаления: ${response.status}`);
       }
+
+      // Обновляем список контента после успешного удаления
+      setContent(prevContent => prevContent.filter(item => item._id !== contentId));
+      
+      // Показываем уведомление об успехе
+      alert('Контент успешно удален');
+    } catch (err) {
+      console.error('Error deleting content:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка удаления контента');
     }
   };
 
@@ -122,6 +144,8 @@ export function ContentManagement() {
           </select>
         </div>
       </div>
+
+      <UploadContent onSuccess={fetchContent} />
 
       {loading ? (
         <div className="flex items-center justify-center h-64">

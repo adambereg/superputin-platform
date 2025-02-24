@@ -174,29 +174,67 @@ router.get('/:contentId', async (req, res) => {
 });
 
 // Удаление контента
-router.delete('/:contentId', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:contentId', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const content = await ContentModel.findById(req.params.contentId);
+    const { contentId } = req.params;
+    console.log('Delete request for content:', contentId);
+    console.log('User:', req.user);
+
+    const content = await ContentModel.findById(contentId);
+    console.log('Found content:', content);
+    
     if (!content) {
-      return res.status(404).json({ error: 'Контент не найден' });
+      return res.status(404).json({ 
+        success: false,
+        error: 'Контент не найден' 
+      });
     }
 
-    // Проверяем права
-    if (content.authorId.toString() !== (req as any).user?.id && (req as any).user?.role !== 'admin') {
-      return res.status(403).json({ error: 'Нет прав на удаление' });
+    // Проверяем права на удаление (админ или автор контента)
+    const hasPermission = req.user?.role === 'admin' || content.authorId.toString() === req.user?.id;
+    console.log('Permission check:', {
+      userRole: req.user?.role,
+      contentAuthorId: content.authorId.toString(),
+      userId: req.user?.id,
+      hasPermission
+    });
+
+    if (!hasPermission) {
+      return res.status(403).json({ 
+        success: false,
+        error: 'Недостаточно прав для удаления' 
+      });
     }
 
-    // Удаляем файл
-    const fileName = content.fileUrl.split('/').pop();
-    if (fileName) {
-      await storageService.deleteFile(fileName);
+    // Удаляем файл из хранилища
+    if (content.fileUrl) {
+      const fileName = content.fileUrl.split('/').pop();
+      console.log('Deleting file:', fileName);
+      if (fileName) {
+        try {
+          await storageService.deleteFile(fileName);
+          console.log('File deleted successfully');
+        } catch (fileError) {
+          console.error('Error deleting file:', fileError);
+          // Продолжаем удаление записи даже если файл не удалился
+        }
+      }
     }
 
-    await content.deleteOne();
-    return res.json({ message: 'Контент успешно удален' });
+    // Удаляем запись из БД
+    const deleteResult = await ContentModel.findByIdAndDelete(contentId);
+    console.log('Delete result:', deleteResult);
+
+    return res.json({ 
+      success: true,
+      message: 'Контент успешно удален' 
+    });
   } catch (error) {
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка удаления контента'
+    console.error('Delete content error:', error);
+    return res.status(500).json({ 
+      success: false,
+      error: 'Ошибка при удалении контента',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
