@@ -224,17 +224,40 @@ export const api = {
     getNFTs: () => 
       fetch(`${API_URL}/content/list?type=nft`).then(res => res.json()),
     
-    upload: (file: File, type: 'comic' | 'meme' | 'nft', metadata: any) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', type);
-      formData.append('metadata', JSON.stringify(metadata));
-      
-      return fetch(`${API_URL}/content/upload`, {
+    getMy: async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          throw new Error('No authentication token');
+        }
+
+        const response = await fetch(`${API_URL}/content/user/content`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch content');
+        }
+
+        return response.json();
+      } catch (error) {
+        console.error('API error:', error);
+        throw error;
+      }
+    },
+
+    upload: (formData: FormData) =>
+      fetch(`${API_URL}/content/upload`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: formData
-      }).then(res => res.json());
-    }
+      }).then(res => res.json())
   },
 
   likes: {

@@ -45,6 +45,53 @@ interface ModerateRequest extends Request {
   }
 }
 
+// Получение контента пользователя
+router.get('/user/content', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    if (!req.user?.id) {
+      console.log('No user ID found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      });
+    }
+
+    console.log('User object:', {
+      id: req.user.id,
+      type: typeof req.user.id
+    });
+
+    const content = await ContentModel.find({ 
+      authorId: req.user.id 
+    })
+    .sort({ createdAt: -1 })
+    .select('title type fileUrl moderationStatus createdAt moderationComment')
+    .lean();
+
+    console.log('Found user content:', {
+      userId: req.user.id,
+      contentCount: content.length
+    });
+
+    return res.json({
+      success: true,
+      content: content || []
+    });
+  } catch (error) {
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+    
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user content',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Получение контента на модерации
 router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRequest, res) => {
   try {
