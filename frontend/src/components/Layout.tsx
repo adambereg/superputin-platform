@@ -35,13 +35,22 @@ export function Layout() {
             </Link>
 
             <div className="hidden md:flex items-center space-x-8">
-              <Link to="/comics" className="hover:text-primary transition-colors">Comics</Link>
-              <Link to="/memes" className="hover:text-primary transition-colors">Memes</Link>
-              <Link to="/nfts" className="hover:text-primary transition-colors">NFTs</Link>
+              <Link to="/comics" className="hover:text-primary">Comics</Link>
+              <Link to="/memes" className="hover:text-primary">Memes</Link>
+              <Link to="/nfts" className="hover:text-primary">NFTs</Link>
+              {user?.role === 'moderator' && (
+                <Link 
+                  to="/moderator" 
+                  className="flex items-center gap-2 text-amber-500 hover:text-amber-600"
+                >
+                  <Shield size={20} />
+                  <span>Модерация</span>
+                </Link>
+              )}
               {user?.role === 'admin' && (
                 <Link 
-                  to="/admin"
-                  className="flex items-center gap-2 text-primary hover:text-primary/80 transition-colors"
+                  to="/admin" 
+                  className="flex items-center gap-2 text-primary hover:text-primary/80"
                 >
                   <Shield size={20} />
                   <span>Админ-панель</span>
@@ -98,6 +107,15 @@ export function Layout() {
             <Link to="/comics" className="block py-2 hover:text-primary">Comics</Link>
             <Link to="/memes" className="block py-2 hover:text-primary">Memes</Link>
             <Link to="/nfts" className="block py-2 hover:text-primary">NFTs</Link>
+            {user?.role === 'moderator' && (
+              <Link 
+                to="/moderator" 
+                className="flex items-center gap-2 py-2 text-amber-500 hover:text-amber-600"
+              >
+                <Shield size={20} />
+                <span>Модерация</span>
+              </Link>
+            )}
             {user?.role === 'admin' && (
               <Link 
                 to="/admin" 
