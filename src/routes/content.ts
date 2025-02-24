@@ -7,6 +7,7 @@ import { User, UserModel } from '../models/User';
 import { StorageService } from '../storage/StorageService';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { AuthRequest } from '../types/AuthRequest';
 
 const router = Router();
 const notificationService = NotificationService.getInstance();
@@ -43,6 +44,40 @@ interface ModerateRequest extends Request {
     comment: string;
   }
 }
+
+// Получение контента на модерации
+router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRequest, res) => {
+  try {
+    console.log('GET /pending request:', {
+      user: {
+        id: req.user?.id,
+        role: req.user?.role,
+        email: req.user?.email
+      },
+      headers: req.headers
+    });
+
+    const pendingContent = await ContentModel.find({ moderationStatus: 'pending' })
+      .populate('authorId', 'username email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    console.log('Found pending content:', JSON.stringify(pendingContent, null, 2));
+
+    return res.json({
+      success: true,
+      content: pendingContent || [],
+      total: pendingContent?.length || 0
+    });
+  } catch (error) {
+    console.error('Error in /pending route:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch pending content',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 // Загрузка контента (мема или комикса)
 router.post('/upload', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
@@ -241,44 +276,53 @@ router.get('/:contentId/likes', async (req, res) => {
   }
 });
 
-// Маршрут для модерации контента
-router.post(
-  '/:contentId/moderate',
-  requireAuth,
-  requireRole('moderator'),
+// Модерация контента
+router.post('/:contentId/moderate', 
+  requireAuth, 
+  requireRole('moderator'), 
   async (req: ModerateRequest, res: Response) => {
     try {
+      const { contentId } = req.params;
       const { status, comment } = req.body;
-      const content = await ContentModel.findById(req.params.contentId);
+
+      const content = await ContentModel.findById(contentId);
       
       if (!content) {
         return res.status(404).json({ error: 'Контент не найден' });
       }
 
-      if (!req.user) {
-        return res.status(401).json({ error: 'Пользователь не авторизован' });
-      }
-
       content.moderationStatus = status;
       content.moderationComment = comment;
-      content.moderatedBy = req.user.id;
+      content.moderatedBy = req.user?.id;
       content.moderatedAt = new Date();
       
       await content.save();
 
-      await UserModel.findByIdAndUpdate(req.user.id, {
-        $inc: {
-          [`moderationStats.${status === 'approved' ? 'approvedContent' : 'rejectedContent'}`]: 1
-        },
-        $set: {
-          'moderationStats.lastModeratedAt': new Date()
-        }
-      });
+      // Отправляем уведомление автору
+      const author = await UserModel.findById(content.authorId);
+      if (author) {
+        await notificationService.createNotification(
+          author,
+          'moderation',
+          req.user as User,
+          content,
+          {
+            status,
+            comment,
+            title: content.title
+          }
+        );
+      }
 
-      return res.json({ message: 'Модерация выполнена успешно' });
+      return res.json({ 
+        message: 'Модерация выполнена успешно',
+        content 
+      });
     } catch (error) {
+      console.error('Moderation error:', error);
       return res.status(500).json({ 
-        error: error instanceof Error ? error.message : 'Ошибка модерации' 
+        error: 'Ошибка при модерации',
+        details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
