@@ -11,24 +11,25 @@ router.get('/stats', requireAuth, requireRole('moderator'), async (req: AuthRequ
     const pendingCount = await ContentModel.countDocuments({ moderationStatus: 'pending' });
     const approvedCount = await ContentModel.countDocuments({ 
       moderationStatus: 'approved',
-      moderatedBy: req.user?.id 
+      moderatedBy: req.user?.id
     });
     const rejectedCount = await ContentModel.countDocuments({ 
       moderationStatus: 'rejected',
-      moderatedBy: req.user?.id 
+      moderatedBy: req.user?.id
     });
-
+    
+    const totalModerated = approvedCount + rejectedCount;
+    
     return res.json({
       success: true,
       stats: {
         pendingCount,
         approvedCount,
         rejectedCount,
-        totalModerated: approvedCount + rejectedCount
+        totalModerated
       }
     });
   } catch (error) {
-    console.error('Error fetching moderator stats:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch moderator stats'
@@ -45,14 +46,13 @@ router.get('/history', requireAuth, requireRole('moderator'), async (req: AuthRe
     })
     .populate('authorId', 'username')
     .sort({ moderatedAt: -1 })
-    .lean();
-
+    .limit(20);
+    
     return res.json({
       success: true,
       history
     });
   } catch (error) {
-    console.error('Error fetching moderation history:', error);
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch moderation history'

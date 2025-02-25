@@ -257,6 +257,21 @@ export const api = {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: formData
+      }).then(res => res.json()),
+
+    getPending: () => 
+      fetch(`${API_URL}/content/pending`, {
+        headers: getHeaders()
+      }).then(res => res.json()),
+    
+    moderate: (contentId: string, data: { status: string; comment: string }) =>
+      fetch(`${API_URL}/content/${contentId}/moderate`, {
+        method: 'POST',
+        headers: {
+          ...getHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
       }).then(res => res.json())
   },
 
@@ -328,6 +343,18 @@ export const api = {
     deleteContent: (contentId: string) =>
       fetch(`${API_URL}/admin/content/${contentId}`, {
         method: 'DELETE',
+        headers: getHeaders()
+      }).then(res => res.json())
+  },
+
+  moderator: {
+    getStats: () => 
+      fetch(`${API_URL}/moderator/stats`, {
+        headers: getHeaders()
+      }).then(res => res.json()),
+    
+    getHistory: () => 
+      fetch(`${API_URL}/moderator/history`, {
         headers: getHeaders()
       }).then(res => res.json())
   }

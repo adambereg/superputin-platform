@@ -5,6 +5,7 @@ import authRoutes from './routes/auth';
 import contentRoutes from './routes/content';
 import notificationRoutes from './routes/notifications';
 import adminRoutes from './routes/admin';
+import moderatorRoutes from './routes/moderator';
 import path from 'path';
 
 const app = express();
@@ -74,6 +75,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/moderator', moderatorRoutes);
 
 // Добавляем раздачу статических файлов
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

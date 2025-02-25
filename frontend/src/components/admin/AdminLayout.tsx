@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Settings, LogOut, Shield } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 
 export function AdminLayout() {
@@ -53,6 +53,17 @@ export function AdminLayout() {
           >
             <FileText size={20} />
             <span>Контент</span>
+          </NavLink>
+
+          <NavLink 
+            to="/admin/moderation"
+            className={({ isActive }) => `
+              flex items-center gap-3 px-4 py-2 rounded-lg transition-colors
+              ${isActive ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-100'}
+            `}
+          >
+            <Shield size={20} />
+            <span>Модерация</span>
           </NavLink>
         </nav>
 

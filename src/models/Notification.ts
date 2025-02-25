@@ -6,7 +6,8 @@ export type NotificationType =
   | 'mention' 
   | 'achievement' 
   | 'nft_purchase' 
-  | 'reply';
+  | 'reply'
+  | 'moderation';
 
 export interface Notification extends Document {
   userId: string;
@@ -24,7 +25,7 @@ const notificationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   type: { 
     type: String, 
-    enum: ['like', 'comment', 'mention', 'achievement', 'nft_purchase', 'reply'], 
+    enum: ['like', 'comment', 'mention', 'achievement', 'nft_purchase', 'reply', 'moderation'], 
     required: true 
   },
   contentId: { type: Schema.Types.ObjectId, ref: 'Content' },

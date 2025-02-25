@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Outlet, Navigate, useLocation } from 'react-router-dom';
-import { Menu, Sun, Moon, Wallet, X, Shield } from 'lucide-react';
+import { Menu, Sun, Moon, Wallet, X, Shield, User } from 'lucide-react';
 import { useTonConnectUI } from '@tonconnect/ui-react';
 import { AuthModal } from './AuthModal';
 import { useUser } from '../contexts/UserContext';
@@ -38,6 +38,15 @@ export function Layout() {
               <Link to="/comics" className="hover:text-primary">Comics</Link>
               <Link to="/memes" className="hover:text-primary">Memes</Link>
               <Link to="/nfts" className="hover:text-primary">NFTs</Link>
+              {isAuthenticated && (
+                <Link 
+                  to="/profile" 
+                  className="flex items-center gap-2 text-gray-600 hover:text-primary"
+                >
+                  <User size={20} />
+                  <span>Профиль</span>
+                </Link>
+              )}
               {user?.role === 'moderator' && (
                 <Link 
                   to="/moderator" 
@@ -107,6 +116,15 @@ export function Layout() {
             <Link to="/comics" className="block py-2 hover:text-primary">Comics</Link>
             <Link to="/memes" className="block py-2 hover:text-primary">Memes</Link>
             <Link to="/nfts" className="block py-2 hover:text-primary">NFTs</Link>
+            {isAuthenticated && (
+              <Link 
+                to="/profile" 
+                className="flex items-center gap-2 py-2 text-gray-600 hover:text-primary"
+              >
+                <User size={20} />
+                <span>Профиль</span>
+              </Link>
+            )}
             {user?.role === 'moderator' && (
               <Link 
                 to="/moderator" 
