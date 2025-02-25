@@ -3,6 +3,7 @@ import { User, Settings, FileText, Award, Bell, Shield, LogOut } from 'lucide-re
 import { useUser } from '../../contexts/UserContext';
 import { api } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
+import { UploadContentModal } from '../../components/UploadContentModal';
 
 interface UserContent {
   _id: string;
@@ -68,66 +69,39 @@ export function UserDashboard() {
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!file) {
-      setUploadError('Пожалуйста, выберите файл');
-      return;
-    }
-
+  const handleUpload = async (formData: FormData) => {
     try {
       setIsUploading(true);
       setUploadError(null);
-      setUploadProgress(0);
       
-      const formData = new FormData();
-      formData.append('title', uploadFormData.title);
-      formData.append('description', uploadFormData.description);
-      formData.append('type', uploadFormData.type);
-      formData.append('file', file);
+      console.log('Uploading content:', {
+        title: formData.get('title'),
+        type: formData.get('type'),
+        tags: formData.get('tags'),
+        file: formData.get('file')
+      });
       
-      // Имитация прогресса загрузки
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 300);
+      const response = await fetch('http://localhost:3000/api/content/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+      console.log('Upload response:', data);
       
-      const response = await api.content.upload(formData);
-      
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-      
-      if (response.success) {
-        setUploadSuccess(true);
-        // Сбрасываем форму
-        setUploadFormData({
-          title: '',
-          description: '',
-          type: 'meme'
-        });
-        setFile(null);
-        
-        // Закрываем модальное окно через 2 секунды
-        setTimeout(() => {
-          setIsUploadModalOpen(false);
-          setUploadSuccess(false);
-          // Обновляем список контента
-          if (activeTab === 'content') {
-            fetchUserContent();
-          }
-        }, 2000);
-      } else {
-        setUploadError(response.error || 'Ошибка загрузки');
+      if (!data.success) {
+        throw new Error(data.error || 'Ошибка загрузки');
       }
-    } catch (err) {
-      setUploadError('Произошла ошибка при загрузке');
-      console.error(err);
+
+      // Обновляем список контента
+      fetchUserContent();
+      setIsUploadModalOpen(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploadError(error instanceof Error ? error.message : 'Ошибка загрузки');
     } finally {
       setIsUploading(false);
     }
@@ -404,124 +378,12 @@ export function UserDashboard() {
         </div>
       </div>
       
-      {/* Модальное окно загрузки контента */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg w-full max-w-md">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-semibold text-lg">Загрузка контента</h3>
-              <button 
-                onClick={() => setIsUploadModalOpen(false)}
-                className="text-gray-500 hover:text-gray-700"
-                disabled={isUploading}
-              >
-                &times;
-              </button>
-            </div>
-            
-            <form onSubmit={handleUpload} className="p-4">
-              {uploadSuccess ? (
-                <div className="bg-green-100 text-green-700 p-4 rounded mb-4">
-                  Контент успешно загружен и отправлен на модерацию!
-                </div>
-              ) : (
-                <>
-                  {uploadError && (
-                    <div className="bg-red-100 text-red-700 p-4 rounded mb-4">
-                      {uploadError}
-                    </div>
-                  )}
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Название
-                    </label>
-                    <input
-                      type="text"
-                      name="title"
-                      value={uploadFormData.title}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      required
-                    />
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Описание
-                    </label>
-                    <textarea
-                      name="description"
-                      value={uploadFormData.description}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      rows={3}
-                    ></textarea>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Тип контента
-                    </label>
-                    <select
-                      name="type"
-                      value={uploadFormData.type}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    >
-                      <option value="meme">Мем</option>
-                      <option value="comic">Комикс</option>
-                      <option value="nft">NFT</option>
-                    </select>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Файл
-                    </label>
-                    <input
-                      type="file"
-                      onChange={handleFileChange}
-                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      accept="image/jpeg,image/png,image/gif"
-                      required
-                    />
-                    {file && (
-                      <p className="mt-1 text-sm text-gray-500">
-                        Выбран файл: {file.name} ({Math.round(file.size / 1024)} KB)
-                      </p>
-                    )}
-                  </div>
-                  
-                  {isUploading && (
-                    <div className="mb-4">
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary transition-all duration-300"
-                          style={{ width: `${uploadProgress}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-center text-sm mt-1">
-                        {uploadProgress}% загружено
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={isUploading}
-                      className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90 transition-colors disabled:bg-gray-400"
-                    >
-                      {isUploading ? 'Загрузка...' : 'Загрузить'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
+      <UploadContentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUpload={handleUpload}
+        simplified={false}
+      />
     </div>
   );
 } 

@@ -1,6 +1,7 @@
 import { User } from '../models/User';
 import { Content, ContentModel, ContentType } from '../models/Content';
 import { GameificationService } from '../gamification/GameificationService';
+import { CONTENT_TAGS } from '../models/Content';
 
 interface UploadedFile {
   buffer: Buffer;
@@ -19,10 +20,25 @@ export class ContentService {
     user: User, 
     file: UploadedFile,
     type: ContentType, 
-    metadata: { title: string; fileUrl: string }
+    metadata: { 
+      title: string; 
+      fileUrl: string;
+      tags: string[];
+    }
   ): Promise<Content> {
     if (!user.id) {
       throw new Error('Пользователь должен быть авторизован');
+    }
+
+    // Валидация тегов
+    if (!metadata.tags || metadata.tags.length === 0) {
+      throw new Error('Необходимо указать хотя бы один тег');
+    }
+
+    // Проверяем, что все теги допустимы для данного типа контента
+    const invalidTags = metadata.tags.filter(tag => !CONTENT_TAGS[type].includes(tag));
+    if (invalidTags.length > 0) {
+      throw new Error(`Недопустимые теги для типа ${type}: ${invalidTags.join(', ')}`);
     }
 
     // Валидация файла
@@ -52,6 +68,7 @@ export class ContentService {
       type,
       title: metadata.title,
       fileUrl: metadata.fileUrl,
+      tags: metadata.tags,
       metadata,
       likes: [],
       likesCount: 0

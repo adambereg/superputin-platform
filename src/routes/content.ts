@@ -1,31 +1,22 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import multer from 'multer';
-import { ContentModel, ModerationStatus } from '../models/Content';
+import { ContentModel } from '../models/Content';
 import { NotificationService } from '../notifications/NotificationService';
 import { requireAuth, requireRole } from '../middleware/authMiddleware';
-import { User, UserModel } from '../models/User';
+import { UserModel } from '../models/User';
 import { StorageService } from '../storage/StorageService';
-import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
 import { AuthRequest } from '../types/AuthRequest';
+import { ContentService } from '../services/ContentService';
 
 const router = Router();
 const notificationService = NotificationService.getInstance();
 const storageService = new StorageService();
 
-// Настраиваем multer для загрузки файлов
-const storage = multer.diskStorage({
-  destination: 'uploads/',
-  filename: (_req, file, cb) => {
-    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  }
-});
-
+// Используем memoryStorage вместо diskStorage
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB
+    fileSize: 5 * 1024 * 1024 // 5MB
   },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
@@ -36,14 +27,6 @@ const upload = multer({
     }
   }
 });
-
-interface ModerateRequest extends Request {
-  user?: User;
-  body: {
-    status: ModerationStatus;
-    comment: string;
-  }
-}
 
 // Получение контента пользователя
 router.get('/user/content', requireAuth, async (req: AuthRequest, res) => {
@@ -93,7 +76,7 @@ router.get('/user/content', requireAuth, async (req: AuthRequest, res) => {
 });
 
 // Получение контента на модерации
-router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRequest, res) => {
+router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRequest, res: Response) => {
   try {
     console.log('GET /pending request:', {
       user: {
@@ -106,70 +89,85 @@ router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRe
 
     const pendingContent = await ContentModel.find({ moderationStatus: 'pending' })
       .populate('authorId', 'username email')
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 });
 
-    console.log('Found pending content:', JSON.stringify(pendingContent, null, 2));
+    console.log('Found pending content:', pendingContent);
 
     return res.json({
       success: true,
-      content: pendingContent || [],
-      total: pendingContent?.length || 0
+      content: pendingContent
     });
   } catch (error) {
-    console.error('Error in /pending route:', error);
+    console.error('Error fetching pending content:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to fetch pending content',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Failed to fetch pending content'
     });
   }
 });
 
-// Загрузка контента (мема или комикса)
-router.post('/upload', requireAuth, upload.single('file'), async (req: Request, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Файл не загружен' });
-    }
-
-    // Получаем данные из form-data напрямую
-    const title = req.body.title;
-    const type = req.body.type;
-
-    if (!title || !type) {
-      return res.status(400).json({ error: 'Не указаны обязательные поля' });
-    }
-
-    const fileUrl = `${process.env.API_URL || 'http://localhost:3000'}/uploads/${req.file.filename}`;
-
-    const content = await ContentModel.create({
-      title,
-      type,
-      fileUrl,
-      authorId: (req as any).user?._id,
-      moderationStatus: 'pending',
-      metadata: {
-        originalName: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype
+// Загрузка контента
+router.post(
+  '/upload',
+  requireAuth,
+  upload.single('file'),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Пользователь не авторизован' });
       }
-    });
 
-    await content.populate('authorId', 'username email');
+      if (!req.file) {
+        return res.status(400).json({ error: 'Файл не загружен' });
+      }
 
-    return res.json({
-      success: true,
-      content
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    return res.status(500).json({
-      error: 'Ошибка при загрузке файла',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+      const { title, type } = req.body;
+      let tags = req.body.tags;
+
+      // Исправляем обработку тегов
+      if (tags) {
+        // Если теги пришли в виде строки JSON, преобразуем их в массив
+        if (typeof tags === 'string') {
+          try {
+            // Проверяем, является ли строка JSON-массивом
+            if (tags.startsWith('[') && tags.endsWith(']')) {
+              tags = JSON.parse(tags);
+            } else {
+              // Если это одиночный тег, преобразуем его в массив
+              tags = [tags];
+            }
+          } catch (e) {
+            // Если не удалось распарсить JSON, считаем это одиночным тегом
+            tags = [tags];
+          }
+        }
+      } else {
+        tags = [];
+      }
+
+      // Проверяем, что теги соответствуют типу контента
+      const contentService = new ContentService();
+      const fileUrl = await storageService.uploadFile(req.file.buffer, req.file.originalname);
+
+      const content = await contentService.uploadContent(req.user, req.file, type, {
+        title,
+        fileUrl,
+        tags
+      });
+
+      return res.status(201).json({
+        success: true,
+        content
+      });
+    } catch (error) {
+      console.warn('Upload error:', error);
+      return res.status(500).json({
+        error: 'Ошибка загрузки контента',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
   }
-});
+);
 
 // Получение списка контента
 router.get('/list', async (req, res) => {
@@ -315,12 +313,15 @@ router.post('/:contentId/like', async (req, res) => {
       // Создаем уведомление только при добавлении лайка
       const contentAuthor = await UserModel.findById(content.authorId);
       if (contentAuthor && contentAuthor.id !== userId) {
-        await notificationService.createNotification(
-          contentAuthor,
-          'like',
-          user,
-          content
-        );
+        await notificationService.createNotification({
+          userId: contentAuthor.id,
+          type: 'like',
+          contentId: content.id,
+          message: `Пользователь поставил лайк вашему контенту "${content.title}"`,
+          metadata: {
+            likedBy: userId
+          }
+        });
       }
     }
 
@@ -361,56 +362,88 @@ router.get('/:contentId/likes', async (req, res) => {
   }
 });
 
-// Модерация контента
-router.post('/:contentId/moderate', 
-  requireAuth, 
-  requireRole('moderator'), 
-  async (req: ModerateRequest, res: Response) => {
+// Маршрут для модерации контента
+router.post(
+  '/moderate/:contentId',
+  requireAuth,
+  requireRole('moderator'),
+  async (req: AuthRequest, res: Response) => {
     try {
       const { contentId } = req.params;
       const { status, comment } = req.body;
-
-      const content = await ContentModel.findById(contentId);
       
+      if (!req.user) {
+        return res.status(401).json({ error: 'Пользователь не авторизован' });
+      }
+      
+      console.log('Модерация контента:', {
+        contentId,
+        status,
+        comment,
+        moderatorId: req.user.id
+      });
+      
+      // Проверяем существование контента
+      const content = await ContentModel.findById(contentId);
       if (!content) {
         return res.status(404).json({ error: 'Контент не найден' });
       }
-
+      
+      // Обновляем статус модерации
       content.moderationStatus = status;
       content.moderationComment = comment;
-      content.moderatedBy = req.user?.id;
+      content.moderatedBy = req.user.id;
       content.moderatedAt = new Date();
       
       await content.save();
-
+      
       // Отправляем уведомление автору
-      const author = await UserModel.findById(content.authorId);
-      if (author) {
-        await notificationService.createNotification(
-          author,
-          'moderation',
-          req.user as User,
-          content,
-          {
-            status,
-            comment,
-            title: content.title
-          }
-        );
-      }
-
-      return res.json({ 
+      await notificationService.createNotification({
+        userId: content.authorId.toString(),
+        type: 'moderation',
+        contentId: content._id.toString(),
+        message: status === 'approved' 
+          ? 'Ваш контент был одобрен модератором' 
+          : `Ваш контент был отклонен. Причина: ${comment || 'Не указана'}`,
+        metadata: { status }
+      });
+      
+      return res.json({
+        success: true,
         message: 'Модерация выполнена успешно',
-        content 
+        content
       });
     } catch (error) {
       console.error('Moderation error:', error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: 'Ошибка при модерации',
         details: error instanceof Error ? error.message : 'Unknown error'
       });
     }
   }
 );
+
+router.get('/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { tag } = req.query;
+    
+    const query: any = { type };
+    if (tag) {
+      query.tags = tag;
+    }
+
+    const content = await ContentModel.find(query)
+      .sort({ createdAt: -1 })
+      .populate('authorId', 'username');
+
+    res.json({ success: true, content });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch content' 
+    });
+  }
+});
 
 export default router; 

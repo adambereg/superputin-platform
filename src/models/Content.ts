@@ -3,6 +3,13 @@ import mongoose, { Document, Schema } from 'mongoose';
 export type ContentType = 'meme' | 'comic' | 'nft';
 export type ModerationStatus = 'pending' | 'approved' | 'rejected';
 
+// Определяем допустимые теги для каждого типа контента
+export const CONTENT_TAGS = {
+  comic: ['Action', 'Sci-Fi', 'Fantasy'],
+  meme: ['Trending', 'Latest', 'Most Liked', 'Crypto', 'NFT', 'Web3'],
+  nft: ['Art', 'Collectibles', 'Photography', 'Gaming', 'Music', 'Virtual Worlds']
+} as const;
+
 export interface Content extends Document {
   authorId: string;
   type: ContentType;
@@ -18,6 +25,7 @@ export interface Content extends Document {
   moderationComment?: string;
   moderatedBy?: string;
   moderatedAt?: Date;
+  tags: string[]; // Добавляем поле для тегов
 }
 
 const contentSchema = new Schema({
@@ -36,9 +44,25 @@ const contentSchema = new Schema({
   },
   moderationComment: { type: String },
   moderatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
-  moderatedAt: { type: Date }
+  moderatedAt: { type: Date },
+  tags: [{ 
+    type: String,
+    validate: [{
+      validator: function(this: mongoose.Document & { type: ContentType }, tag: string) {
+        // Получаем тип контента напрямую из документа
+        const contentType = this.type;
+        // Проверяем наличие тега в списке допустимых тегов
+        return Array.isArray(CONTENT_TAGS[contentType]) && 
+               CONTENT_TAGS[contentType].indexOf(tag) !== -1;
+      },
+      message: 'Invalid tag for content type'
+    }]
+  }]
 }, {
   timestamps: true
 });
+
+// Добавляем индекс для быстрого поиска по тегам
+contentSchema.index({ tags: 1 });
 
 export const ContentModel = mongoose.model<Content>('Content', contentSchema);

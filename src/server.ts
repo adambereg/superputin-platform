@@ -77,8 +77,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/moderator', moderatorRoutes);
 
-// Добавляем раздачу статических файлов
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Добавляем обработку статических файлов
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 async function startServer() {
   try {

@@ -44,7 +44,7 @@ export function ModerationQueue() {
 
   const handleModerate = async (contentId: string, status: 'approved' | 'rejected') => {
     try {
-      const response = await fetch(`http://localhost:3000/api/content/${contentId}/moderate`, {
+      const response = await fetch(`http://localhost:3000/api/content/moderate/${contentId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -55,15 +55,20 @@ export function ModerationQueue() {
           comment: moderationComment
         })
       });
-
-      if (!response.ok) {
-        throw new Error('Ошибка модерации');
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Обновляем список после успешной модерации
+        setContent(content.filter(item => item._id !== contentId));
+        setModerationComment('');
+        alert(status === 'approved' ? 'Контент одобрен' : 'Контент отклонен');
+      } else {
+        alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
       }
-
-      await fetchPendingContent();
-      setModerationComment('');
-    } catch (err) {
-      setError('Ошибка при модерации контента');
+    } catch (error) {
+      console.error('Ошибка модерации:', error);
+      alert('Ошибка при выполнении модерации');
     }
   };
 

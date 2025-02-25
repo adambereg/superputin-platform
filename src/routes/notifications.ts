@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { NotificationService } from '../notifications/NotificationService';
-import { UserModel } from '../models/User';
-import { NotificationType } from '../models/Notification';
+import { requireAuth } from '../middleware/authMiddleware';
+import { AuthRequest } from '../types/AuthRequest';
 
 const router = Router();
 const notificationService = NotificationService.getInstance();
@@ -31,27 +31,29 @@ router.post('/:notificationId/read', async (req, res) => {
 });
 
 // Тестовый маршрут для создания уведомлений
-router.post('/test', async (req, res) => {
+router.post('/test', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { userId, type, metadata } = req.body;
-    
-    const user = await UserModel.findById(userId);
+    const { type, metadata } = req.body;
+    const user = req.user;
+
     if (!user) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
+      return res.status(401).json({ error: 'Пользователь не авторизован' });
     }
 
-    await notificationService.createNotification(
-      user,
-      type as NotificationType,
-      null, // от системы
-      undefined,
-      metadata
-    );
+    await notificationService.createNotification({
+      userId: user.id,
+      type: type,
+      contentId: 'test',
+      message: 'Тестовое уведомление',
+      metadata: metadata
+    });
 
-    return res.json({ message: 'Тестовое уведомление создано' });
+    return res.json({ success: true });
   } catch (error) {
+    console.error('Error creating test notification:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка создания уведомления'
+      error: 'Failed to create test notification',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
