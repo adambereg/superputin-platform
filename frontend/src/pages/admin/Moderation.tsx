@@ -76,6 +76,74 @@ export function ModerationPage() {
     setIsModalOpen(true);
   };
 
+  const handleApprove = async (contentId: string, comment: string = '') => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`http://localhost:3000/api/content/${contentId}/moderate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          status: 'approved',
+          comment
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Обновляем список контента
+        fetchPendingContent();
+        setSelectedContent(null);
+      } else {
+        console.error('Error approving content:', data.error);
+        alert('Ошибка при одобрении контента: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error approving content:', error);
+      alert('Ошибка при одобрении контента');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReject = async (contentId: string, comment: string = '') => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`http://localhost:3000/api/content/${contentId}/moderate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          status: 'rejected',
+          comment
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        // Обновляем список контента
+        fetchPendingContent();
+        setSelectedContent(null);
+      } else {
+        console.error('Error rejecting content:', data.error);
+        alert('Ошибка при отклонении контента: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error rejecting content:', error);
+      alert('Ошибка при отклонении контента');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -204,14 +272,14 @@ export function ModerationPage() {
               
               <div className="flex justify-end gap-3">
                 <button
-                  onClick={() => handleModerate('rejected')}
+                  onClick={() => handleReject(selectedContent._id, moderationComment)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
                 >
                   <XCircle size={18} />
                   Отклонить
                 </button>
                 <button
-                  onClick={() => handleModerate('approved')}
+                  onClick={() => handleApprove(selectedContent._id, moderationComment)}
                   className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
                 >
                   <CheckCircle size={18} />

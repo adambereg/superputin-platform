@@ -134,7 +134,6 @@ router.post('/upload', requireAuth, upload.single('file'), async (req: AuthReque
 
     // Если теги пришли, проверяем их валидность
     if (tags && tags.length > 0) {
-      // Здесь можно добавить проверку тегов, если нужно
       console.log('Received tags:', tags);
     }
 
@@ -158,12 +157,35 @@ router.post('/upload', requireAuth, upload.single('file'), async (req: AuthReque
       }
     );
 
-    // Если пользователь модератор или админ, автоматически одобряем контент
+    // Только модераторы и админы могут автоматически одобрять контент
+    // Для обычных пользователей контент должен пройти модерацию
     if (req.user?.role === 'admin' || req.user?.role === 'moderator') {
       content.moderationStatus = 'approved';
       content.moderatedBy = req.user.id;
       content.moderatedAt = new Date();
       await content.save();
+      
+      // Отправляем уведомление о том, что контент одобрен
+      await notificationService.createNotification({
+        userId: content.authorId.toString(),
+        type: 'moderation',
+        contentId: content.id,
+        message: 'Ваш контент был автоматически одобрен',
+        metadata: { status: 'approved' }
+      });
+    } else {
+      // Для обычных пользователей контент отправляется на модерацию
+      content.moderationStatus = 'pending';
+      await content.save();
+      
+      // Отправляем уведомление о том, что контент отправлен на модерацию
+      await notificationService.createNotification({
+        userId: content.authorId.toString(),
+        type: 'moderation',
+        contentId: content.id,
+        message: 'Ваш контент отправлен на модерацию',
+        metadata: { status: 'pending' }
+      });
     }
 
     return res.status(201).json({
@@ -173,7 +195,8 @@ router.post('/upload', requireAuth, upload.single('file'), async (req: AuthReque
         title: content.title,
         fileUrl: content.fileUrl,
         type: content.type,
-        tags: content.tags
+        tags: content.tags,
+        moderationStatus: content.moderationStatus
       }
     });
   } catch (error) {
@@ -379,66 +402,74 @@ router.get('/:contentId/likes', async (req, res) => {
   }
 });
 
-// Маршрут для модерации контента
-router.post(
-  '/moderate/:contentId',
-  requireAuth,
-  requireRole('moderator'),
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const { contentId } = req.params;
-      const { status, comment } = req.body;
-      
-      if (!req.user) {
-        return res.status(401).json({ error: 'Пользователь не авторизован' });
-      }
-      
-      console.log('Модерация контента:', {
-        contentId,
-        status,
-        comment,
-        moderatorId: req.user.id
-      });
-      
-      // Проверяем существование контента
-      const content = await ContentModel.findById(contentId);
-      if (!content) {
-        return res.status(404).json({ error: 'Контент не найден' });
-      }
-      
-      // Обновляем статус модерации
-      content.moderationStatus = status;
-      content.moderationComment = comment;
-      content.moderatedBy = req.user.id;
-      content.moderatedAt = new Date();
-      
-      await content.save();
-      
-      // Отправляем уведомление автору
-      await notificationService.createNotification({
-        userId: content.authorId.toString(),
-        type: 'moderation',
-        contentId: content._id.toString(),
-        message: status === 'approved' 
-          ? 'Ваш контент был одобрен модератором' 
-          : `Ваш контент был отклонен. Причина: ${comment || 'Не указана'}`,
-        metadata: { status }
-      });
-      
-      return res.json({
-        success: true,
-        message: 'Модерация выполнена успешно',
-        content
-      });
-    } catch (error) {
-      console.error('Moderation error:', error);
-      return res.status(500).json({
-        error: 'Ошибка при модерации',
-        details: error instanceof Error ? error.message : 'Unknown error'
+// Модерация контента
+router.post('/:contentId/moderate', requireAuth, requireRole('moderator'), async (req: AuthRequest, res) => {
+  try {
+    const { contentId } = req.params;
+    const { status, comment } = req.body;
+    
+    console.log('Moderation request:', {
+      contentId,
+      status,
+      comment,
+      moderator: req.user?.id
+    });
+
+    // Проверяем, что статус валидный
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Неверный статус модерации'
       });
     }
+
+    // Находим контент
+    const content = await ContentModel.findById(contentId);
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        error: 'Контент не найден'
+      });
+    }
+
+    // Обновляем статус модерации
+    content.moderationStatus = status;
+    content.moderationComment = comment || '';
+    content.moderatedBy = req.user?.id;
+    content.moderatedAt = new Date();
+    await content.save();
+
+    // Отправляем уведомление автору
+    await notificationService.createNotification({
+      userId: content.authorId.toString(),
+      type: 'moderation',
+      contentId: content.id,
+      message: status === 'approved' 
+        ? 'Ваш контент был одобрен модератором' 
+        : 'Ваш контент был отклонен модератором',
+      metadata: { 
+        status,
+        comment: comment || ''
+      }
+    });
+
+    return res.json({
+      success: true,
+      content: {
+        id: content.id,
+        moderationStatus: content.moderationStatus,
+        moderatedAt: content.moderatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Moderation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Ошибка при модерации контента',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-);
+});
 
 router.get('/:type', async (req, res) => {
   try {
