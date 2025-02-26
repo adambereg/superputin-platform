@@ -567,4 +567,26 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// Получение трендового контента
+router.get('/trending', async (_req, res) => {
+  try {
+    const trendingContent = await ContentModel.find({ moderationStatus: 'approved' })
+      .sort({ likesCount: -1, createdAt: -1 })
+      .limit(6)
+      .populate('authorId', 'username')
+      .lean();
+
+    return res.json({
+      success: true,
+      content: trendingContent
+    });
+  } catch (error) {
+    console.error('Error fetching trending content:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch trending content'
+    });
+  }
+});
+
 export default router; 

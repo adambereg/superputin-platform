@@ -374,6 +374,27 @@ export const api = {
         console.error('Error deleting content:', error);
         throw error;
       }
+    },
+
+    getTrending: async () => {
+      try {
+        const response = await fetch(`${API_URL}/content/trending`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        const data = await response.json();
+        return {
+          success: true,
+          content: data.content
+        };
+      } catch (error) {
+        console.error('Error fetching trending content:', error);
+        return {
+          success: false,
+          error: 'Failed to fetch trending content'
+        };
+      }
     }
   },
 
