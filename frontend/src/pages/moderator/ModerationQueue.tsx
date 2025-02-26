@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react';
+import { EditContentModal } from '../../components/EditContentModal';
 
 interface Content {
   _id: string;
@@ -18,6 +19,7 @@ export function ModerationQueue() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [moderationComment, setModerationComment] = useState('');
+  const [editingContent, setEditingContent] = useState<any>(null);
 
   useEffect(() => {
     fetchPendingContent();
@@ -69,6 +71,26 @@ export function ModerationQueue() {
     } catch (error) {
       console.error('Ошибка модерации:', error);
       alert('Ошибка при выполнении модерации');
+    }
+  };
+
+  const handleUpdateContent = async (contentId: string, data: { title: string; tags: string[] }) => {
+    try {
+      await api.content.update(contentId, data);
+      // Обновляем список контента
+      fetchPendingContent();
+    } catch (error) {
+      console.error('Failed to update content:', error);
+    }
+  };
+
+  const handleDeleteContent = async (contentId: string) => {
+    try {
+      await api.content.delete(contentId);
+      // Обновляем список контента
+      fetchPendingContent();
+    } catch (error) {
+      console.error('Failed to delete content:', error);
     }
   };
 
@@ -144,6 +166,25 @@ export function ModerationQueue() {
                 Отклонить
               </button>
             </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setEditingContent(item)}
+                className="p-2 text-gray-600 hover:text-primary transition-colors"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Вы уверены, что хотите удалить этот контент?')) {
+                    handleDeleteContent(item._id);
+                  }
+                }}
+                className="p-2 text-gray-600 hover:text-red-600 transition-colors"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
         ))}
 
@@ -153,6 +194,15 @@ export function ModerationQueue() {
           </div>
         )}
       </div>
+
+      {editingContent && (
+        <EditContentModal
+          content={editingContent}
+          onClose={() => setEditingContent(null)}
+          onUpdate={handleUpdateContent}
+          onDelete={handleDeleteContent}
+        />
+      )}
     </div>
   );
 } 

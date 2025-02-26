@@ -3,6 +3,8 @@ import { api } from '../../api/client';
 import { Search, Eye, Trash2, AlertCircle, Filter, Upload } from 'lucide-react';
 import { UploadContent } from '../../components/UploadContent';
 import { UploadContentModal } from '../../components/UploadContentModal';
+import { EditContentModal } from '../../components/EditContentModal';
+import { Edit2 } from 'lucide-react';
 
 interface Content {
   _id: string;
@@ -37,6 +39,7 @@ export function ContentManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [editingContent, setEditingContent] = useState<any>(null);
 
   useEffect(() => {
     fetchContent();
@@ -140,6 +143,26 @@ export function ContentManagement() {
     }
   };
 
+  const handleUpdateContent = async (contentId: string, data: { title: string; tags: string[] }) => {
+    try {
+      await api.content.update(contentId, data);
+      // Обновляем список контента
+      fetchContent();
+    } catch (error) {
+      console.error('Failed to update content:', error);
+    }
+  };
+
+  const handleDeleteContent = async (contentId: string) => {
+    try {
+      await api.content.delete(contentId);
+      // Обновляем список контента
+      fetchContent();
+    } catch (error) {
+      console.error('Failed to delete content:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -232,7 +255,11 @@ export function ContentManagement() {
                           <Eye size={18} />
                         </button>
                         <button
-                          onClick={() => handleDelete(item._id)}
+                          onClick={() => {
+                            if (window.confirm('Вы уверены, что хотите удалить этот контент?')) {
+                              handleDeleteContent(item._id);
+                            }
+                          }}
                           className="text-red-400 hover:text-red-600 transition-colors"
                           title="Удалить"
                         >
@@ -271,6 +298,15 @@ export function ContentManagement() {
         onUpload={handleUpload}
         simplified={true} // Упрощенный режим для админов
       />
+
+      {editingContent && (
+        <EditContentModal
+          content={editingContent}
+          onClose={() => setEditingContent(null)}
+          onUpdate={handleUpdateContent}
+          onDelete={handleDeleteContent}
+        />
+      )}
     </div>
   );
 } 
