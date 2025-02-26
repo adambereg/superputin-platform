@@ -6,47 +6,34 @@ import { useUser } from '../contexts/UserContext';
 interface UploadContentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onUpload: (formData: FormData) => Promise<void>;
-  defaultType?: ContentType;
+  onUpload: (formData: FormData) => void;
   simplified?: boolean;
 }
 
-export function UploadContentModal({ 
-  isOpen, 
-  onClose, 
-  onUpload, 
-  defaultType = 'meme',
-  simplified = false
-}: UploadContentModalProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [type, setType] = useState<ContentType>(defaultType);
+export function UploadContentModal({ isOpen, onClose, onUpload, simplified = false }: UploadContentModalProps) {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    type: 'meme'
+  });
   const [file, setFile] = useState<File | null>(null);
+  const [comicFiles, setComicFiles] = useState<File[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [preview, setPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { user } = useUser();
 
-  // Сбрасываем форму при открытии/закрытии
   useEffect(() => {
     if (isOpen) {
-      setTitle('');
-      setDescription('');
-      setType(defaultType);
+      setFormData({ title: '', description: '', type: 'meme' });
       setFile(null);
-      setPreview(null);
+      setComicFiles([]);
       setSelectedTags([]);
       setError(null);
     }
-  }, [isOpen, defaultType]);
+  }, [isOpen]);
 
-  // Сбрасываем выбранные теги при изменении типа контента
-  useEffect(() => {
-    setSelectedTags([]);
-  }, [type]);
-
-  // Создаем превью при выборе файла
   useEffect(() => {
     if (!file) {
       setPreview(null);
@@ -61,49 +48,62 @@ export function UploadContentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsUploading(true);
+    setError(null);
     
-    if (!file) {
-      setError('Пожалуйста, выберите файл');
-      return;
-    }
-
-    if (!title) {
-      setError('Пожалуйста, введите название');
-      return;
-    }
-
     try {
-      setIsUploading(true);
-      setError(null);
+      const uploadFormData = new FormData();
+      uploadFormData.append('title', formData.title);
+      uploadFormData.append('description', formData.description);
+      uploadFormData.append('type', formData.type);
       
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('type', type);
-      formData.append('file', file);
-      
-      if (description) {
-        formData.append('description', description);
+      if (selectedTags.length > 0) {
+        uploadFormData.append('tags', JSON.stringify(selectedTags));
       }
       
-      // Добавляем выбранные теги
-      selectedTags.forEach(tag => {
-        formData.append('tags[]', tag);
+      if (formData.type === 'comic') {
+        comicFiles.forEach(file => {
+          uploadFormData.append('files', file);
+        });
+      } else {
+        if (file) {
+          uploadFormData.append('files', file);
+        }
+      }
+      
+      console.log('Uploading content with form data:', {
+        title: formData.title,
+        type: formData.type,
+        tagsCount: selectedTags.length,
+        filesCount: formData.type === 'comic' ? comicFiles.length : (file ? 1 : 0)
       });
       
-      await onUpload(formData);
+      await onUpload(uploadFormData);
       onClose();
-    } catch (error) {
-      console.error('Upload error:', error);
-      setError('Ошибка при загрузке файла');
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err instanceof Error ? err.message : 'Ошибка при загрузке');
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+    if (e.target.files) {
+      if (formData.type === 'comic') {
+        setComicFiles(Array.from(e.target.files));
+      } else {
+        setFile(e.target.files[0]);
+      }
     }
+  };
+
+  const handleClose = () => {
+    setFormData({ title: '', description: '', type: 'meme' });
+    setFile(null);
+    setComicFiles([]);
+    setSelectedTags([]);
+    onClose();
   };
 
   const toggleTag = (tag: string) => {
@@ -122,7 +122,7 @@ export function UploadContentModal({
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold">Загрузка контента</h2>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-500 hover:text-gray-700"
           >
             <X size={20} />
@@ -135,9 +135,9 @@ export function UploadContentModal({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setType('meme')}
+                onClick={() => setFormData(prev => ({ ...prev, type: 'meme' }))}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                  type === 'meme' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                  formData.type === 'meme' ? 'bg-primary text-white' : 'bg-white text-gray-700'
                 }`}
               >
                 <Image size={20} />
@@ -145,9 +145,9 @@ export function UploadContentModal({
               </button>
               <button
                 type="button"
-                onClick={() => setType('comic')}
+                onClick={() => setFormData(prev => ({ ...prev, type: 'comic' }))}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                  type === 'comic' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                  formData.type === 'comic' ? 'bg-primary text-white' : 'bg-white text-gray-700'
                 }`}
               >
                 <FileText size={20} />
@@ -155,9 +155,9 @@ export function UploadContentModal({
               </button>
               <button
                 type="button"
-                onClick={() => setType('nft')}
+                onClick={() => setFormData(prev => ({ ...prev, type: 'nft' }))}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                  type === 'nft' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                  formData.type === 'nft' ? 'bg-primary text-white' : 'bg-white text-gray-700'
                 }`}
               >
                 <Palette size={20} />
@@ -170,8 +170,8 @@ export function UploadContentModal({
             <label className="block text-sm font-medium mb-1">Название</label>
             <input
               type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
               className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
               placeholder="Введите название"
               required
@@ -179,13 +179,15 @@ export function UploadContentModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Описание (опционально)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Описание (опционально)
+            </label>
             <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-              placeholder="Введите описание"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               rows={3}
+              placeholder="Введите описание комикса..."
             />
           </div>
 
@@ -195,7 +197,7 @@ export function UploadContentModal({
               Теги
             </label>
             <div className="flex flex-wrap gap-2 mt-2">
-              {CONTENT_TAGS[type].map(tag => (
+              {CONTENT_TAGS[formData.type].map(tag => (
                 <button
                   key={tag}
                   type="button"
@@ -213,26 +215,48 @@ export function UploadContentModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Файл</label>
-            <label className="block w-full cursor-pointer border-2 border-dashed border-gray-300 rounded-lg hover:border-primary transition-colors">
+            <label className="block text-sm font-medium mb-2">Файл</label>
+            {formData.type === 'comic' ? (
+              <div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="comic-files"
+                />
+                <label
+                  htmlFor="comic-files"
+                  className="cursor-pointer flex items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-primary transition-colors"
+                >
+                  {comicFiles.length > 0 ? (
+                    <div>
+                      <p>Выбрано файлов: {comicFiles.length}</p>
+                      <p className="text-sm text-gray-500">Нажмите, чтобы изменить</p>
+                    </div>
+                  ) : (
+                    <p>Выберите страницы комикса</p>
+                  )}
+                </label>
+                <p className="text-sm text-gray-500 mt-1">
+                  Вы можете выбрать несколько изображений для страниц комикса.
+                  Первое изображение будет использовано как обложка.
+                </p>
+              </div>
+            ) : (
               <input
                 type="file"
+                accept={formData.type === 'nft' ? 'image/*,.gif' : 'image/*'}
                 onChange={handleFileChange}
-                className="hidden"
-                accept="image/jpeg,image/png,image/gif"
+                className="block w-full text-sm text-gray-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-full file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-primary file:text-white
+                  hover:file:bg-primary/90"
               />
-              {preview ? (
-                <div className="flex flex-col items-center">
-                  <img src={preview} alt="Preview" className="max-h-40 object-contain mb-2" />
-                  <span className="text-sm text-gray-500">Нажмите, чтобы изменить</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center py-4">
-                  <Upload size={24} className="text-gray-400 mb-2" />
-                  <span>Выберите файл</span>
-                </div>
-              )}
-            </label>
+            )}
           </div>
 
           {error && (
@@ -241,7 +265,10 @@ export function UploadContentModal({
 
           <button
             type="submit"
-            disabled={isUploading || !file || !title}
+            disabled={isUploading || 
+              (!file && formData.type !== 'comic') || 
+              (formData.type === 'comic' && comicFiles.length === 0) || 
+              !formData.title}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {isUploading ? (

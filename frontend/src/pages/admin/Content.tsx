@@ -255,6 +255,13 @@ export function ContentManagement() {
                           <Eye size={18} />
                         </button>
                         <button
+                          onClick={() => setEditingContent(item)}
+                          className="text-blue-400 hover:text-blue-600 transition-colors"
+                          title="Редактировать"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
                           onClick={() => {
                             if (window.confirm('Вы уверены, что хотите удалить этот контент?')) {
                               handleDeleteContent(item._id);

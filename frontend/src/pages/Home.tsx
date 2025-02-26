@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Rocket, Image, Coins, Heart, Eye, Wallet, ChevronLeft, ChevronRight, Clock, MessageCircle, Share2 } from 'lucide-react';
+import { Heart, Eye, ChevronLeft, ChevronRight, Clock, MessageCircle } from 'lucide-react';
 import { useUser } from '../contexts/UserContext';
 import { AuthModal } from '../components/AuthModal';
 import { api } from '../api/client';
@@ -30,7 +30,6 @@ export function Home() {
   const [memes, setMemes] = useState<Content[]>([]);
   const [nfts, setNfts] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedNFT, setSelectedNFT] = useState<Content | null>(null);
   const [selectedMeme, setSelectedMeme] = useState<Content | null>(null);
 
@@ -60,7 +59,6 @@ export function Home() {
           setNfts(nftsResponse.content);
         }
       } catch (err) {
-        setError('Ошибка загрузки контента');
         console.error(err);
       } finally {
         setLoading(false);

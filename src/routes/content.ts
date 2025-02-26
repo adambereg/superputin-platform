@@ -1,32 +1,14 @@
 import { Router, Response } from 'express';
-import multer from 'multer';
-import { ContentModel, ContentType } from '../models/Content';
+import { ContentModel } from '../models/Content';
 import { NotificationService } from '../notifications/NotificationService';
 import { requireAuth, requireRole } from '../middleware/authMiddleware';
-import { UserModel } from '../models/User';
 import { StorageService } from '../storage/StorageService';
 import { AuthRequest } from '../types/AuthRequest';
-import { ContentService } from '../services/ContentService';
+import { upload } from '../config/multer';
 
 const router = Router();
 const notificationService = NotificationService.getInstance();
 const storageService = new StorageService();
-
-// Используем memoryStorage вместо diskStorage
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
-  },
-  fileFilter: (_req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Неподдерживаемый формат файла') as any);
-    }
-  }
-});
 
 // Получение контента пользователя
 router.get('/user/content', requireAuth, async (req: AuthRequest, res) => {
@@ -107,105 +89,85 @@ router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRe
 });
 
 // Загрузка контента
-router.post('/upload', requireAuth, upload.single('file'), async (req: AuthRequest, res) => {
+router.post('/upload', requireAuth, upload.array('files'), async (req: AuthRequest, res: Response) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'Файл не загружен'
-      });
-    }
-
-    const { title, type, description } = req.body;
-    let tags = req.body['tags[]'] || [];
-    
-    // Если tags пришел как строка (один тег), преобразуем в массив
-    if (!Array.isArray(tags)) {
-      tags = [tags];
-    }
-    
-    // Проверяем, что тип контента валидный
-    if (!['meme', 'comic', 'nft'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Неверный тип контента'
-      });
-    }
-
-    // Если теги пришли, проверяем их валидность
-    if (tags && tags.length > 0) {
-      console.log('Received tags:', tags);
-    }
-
-    // Загружаем файл в хранилище
-    const fileUrl = await storageService.uploadFile(
-      req.file.buffer,
-      req.file.originalname
-    );
-
-    // Создаем запись о контенте
-    const contentService = new ContentService();
-    const content = await contentService.uploadContent(
-      req.user!,
-      req.file,
-      type as ContentType,
-      {
-        title,
-        fileUrl,
-        tags,
-        description
-      }
-    );
-
-    // Только модераторы и админы могут автоматически одобрять контент
-    // Для обычных пользователей контент должен пройти модерацию
-    if (req.user?.role === 'admin' || req.user?.role === 'moderator') {
-      content.moderationStatus = 'approved';
-      content.moderatedBy = req.user.id;
-      content.moderatedAt = new Date();
-      await content.save();
-      
-      // Отправляем уведомление о том, что контент одобрен
-      await notificationService.createNotification({
-        userId: content.authorId.toString(),
-        type: 'moderation',
-        contentId: content.id,
-        message: 'Ваш контент был автоматически одобрен',
-        metadata: { status: 'approved' }
-      });
-    } else {
-      // Для обычных пользователей контент отправляется на модерацию
-      content.moderationStatus = 'pending';
-      await content.save();
-      
-      // Отправляем уведомление о том, что контент отправлен на модерацию
-      await notificationService.createNotification({
-        userId: content.authorId.toString(),
-        type: 'moderation',
-        contentId: content.id,
-        message: 'Ваш контент отправлен на модерацию',
-        metadata: { status: 'pending' }
-      });
-    }
-
-    return res.status(201).json({
-      success: true,
-      content: {
-        id: content.id,
-        title: content.title,
-        fileUrl: content.fileUrl,
-        type: content.type,
-        tags: content.tags,
-        moderationStatus: content.moderationStatus
-      }
+    console.log('Upload request received:', {
+      body: req.body,
+      files: req.files ? (Array.isArray(req.files) ? `${req.files.length} files` : 'files object') : 'no files',
+      user: req.user?._id
     });
+    
+    const { title, description, type, tags } = req.body;
+    
+    if (!req.files || (!Array.isArray(req.files) && !req.files.length)) {
+      console.log('No files uploaded');
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const files = Array.isArray(req.files) ? req.files : [req.files];
+    console.log(`Processing ${files.length} files`);
+    
+    // Загружаем файлы в хранилище
+    const uploadedFiles = await Promise.all(
+      files.map(async (file: any, index: number) => {
+        console.log(`Processing file ${index + 1}/${files.length}:`, {
+          originalname: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          hasBuffer: !!file.buffer
+        });
+        
+        // Проверяем, что file.buffer существует
+        if (!file.buffer) {
+          throw new Error('File buffer is missing');
+        }
+        
+        const fileUrl = await storageService.uploadFile(file.buffer, file.originalname);
+        console.log(`File ${index + 1} uploaded to: ${fileUrl}`);
+        return fileUrl;
+      })
+    );
+
+    console.log('All files uploaded successfully:', uploadedFiles);
+    
+    // Обработка тегов - преобразуем строку JSON в массив
+    let parsedTags: string[] = [];
+    if (tags) {
+      try {
+        parsedTags = JSON.parse(tags);
+        console.log('Parsed tags:', parsedTags);
+      } catch (e) {
+        console.error('Error parsing tags:', e);
+        // Если не удалось распарсить JSON, проверяем, может это строка
+        if (typeof tags === 'string') {
+          parsedTags = [tags];
+        }
+      }
+    }
+
+    const content = new ContentModel({
+      authorId: req.user?._id,
+      type,
+      title,
+      fileUrl: uploadedFiles[0], // Первый файл как основное изображение
+      pages: type === 'comic' ? uploadedFiles : [], // Для комиксов сохраняем все страницы
+      tags: parsedTags,
+      metadata: {
+        description,
+        originalName: files[0].originalname,
+        size: files[0].size,
+        mimetype: files[0].mimetype
+      },
+      moderationStatus: 'pending'
+    });
+
+    await content.save();
+    console.log('Content saved to database:', content._id);
+    
+    return res.status(201).json({ success: true, content });
   } catch (error) {
     console.error('Upload error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Ошибка при загрузке контента',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
 
@@ -241,20 +203,20 @@ router.get('/list', async (req, res) => {
 });
 
 // Получение контента по ID
-router.get('/:contentId', async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const content = await ContentModel.findById(req.params.contentId)
-      .populate('authorId', 'username');
+    const content = await ContentModel.findById(req.params.id)
+      .populate('authorId', 'username')
+      .lean();
     
     if (!content) {
-      return res.status(404).json({ error: 'Контент не найден' });
+      return res.status(404).json({ error: 'Content not found' });
     }
 
-    return res.json({ content });
+    return res.json(content);
   } catch (error) {
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка получения контента'
-    });
+    console.error('Error fetching content:', error);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -324,80 +286,88 @@ router.delete('/:contentId', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Поставить/убрать лайк
-router.post('/:contentId/like', async (req, res) => {
+// Лайк контента
+router.post('/:id/like', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { userId } = req.body;
-    const content = await ContentModel.findById(req.params.contentId);
+    const contentId = req.params.id;
+    const userId = req.user?.id;
     
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Пользователь не авторизован'
+      });
+    }
+    
+    const content = await ContentModel.findById(contentId);
     if (!content) {
-      return res.status(404).json({ error: 'Контент не найден' });
+      return res.status(404).json({
+        success: false,
+        error: 'Контент не найден'
+      });
     }
-
-    const user = await UserModel.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'Пользователь не найден' });
-    }
-
-    const hasLiked = content.likes.includes(userId);
     
-    if (hasLiked) {
-      // Убираем лайк
-      content.likes = content.likes.filter(id => id.toString() !== userId);
-      content.likesCount = Math.max(0, content.likesCount - 1);
-    } else {
+    // Проверяем, лайкнул ли пользователь уже этот контент
+    const likeIndex = content.likes.indexOf(userId);
+    
+    if (likeIndex === -1) {
       // Добавляем лайк
       content.likes.push(userId);
-      content.likesCount += 1;
-
-      // Создаем уведомление только при добавлении лайка
-      const contentAuthor = await UserModel.findById(content.authorId);
-      if (contentAuthor && contentAuthor.id !== userId) {
-        await notificationService.createNotification({
-          userId: contentAuthor.id,
-          type: 'like',
-          contentId: content.id,
-          message: `Пользователь поставил лайк вашему контенту "${content.title}"`,
-          metadata: {
-            likedBy: userId
-          }
-        });
-      }
+      content.likesCount = content.likes.length;
+    } else {
+      // Убираем лайк
+      content.likes.splice(likeIndex, 1);
+      content.likesCount = content.likes.length;
     }
-
+    
     await content.save();
-
+    
     return res.json({
-      message: hasLiked ? 'Лайк убран' : 'Лайк добавлен',
+      success: true,
       likesCount: content.likesCount,
-      hasLiked: !hasLiked
+      isLiked: likeIndex === -1
     });
-
   } catch (error) {
+    console.error('Ошибка при лайке контента:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка обработки лайка'
+      success: false,
+      error: 'Ошибка сервера при лайке контента'
     });
   }
 });
 
-// Получить список лайкнувших пользователей
-router.get('/:contentId/likes', async (req, res) => {
+// Проверка статуса лайка
+router.get('/:id/like-status', requireAuth, async (req: AuthRequest, res) => {
   try {
-    const content = await ContentModel.findById(req.params.contentId)
-      .populate('likes', 'username');
+    const contentId = req.params.id;
+    const userId = req.user?.id;
     
-    if (!content) {
-      return res.status(404).json({ error: 'Контент не найден' });
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Пользователь не авторизован'
+      });
     }
-
+    
+    const content = await ContentModel.findById(contentId);
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        error: 'Контент не найден'
+      });
+    }
+    
+    const isLiked = content.likes.includes(userId);
+    
     return res.json({
-      likesCount: content.likesCount,
-      users: content.likes
+      success: true,
+      isLiked
     });
-
   } catch (error) {
+    console.error('Ошибка при проверке статуса лайка:', error);
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Ошибка получения списка лайков'
+      success: false,
+      error: 'Ошибка сервера при проверке статуса лайка'
     });
   }
 });
@@ -543,6 +513,57 @@ router.get('/type/:type', async (req, res) => {
       success: false,
       error: 'Ошибка сервера при получении контента'
     });
+  }
+});
+
+// Обновление контента
+router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const content = await ContentModel.findById(req.params.id);
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    // Проверяем, является ли пользователь владельцем контента или админом
+    if (content.authorId.toString() !== req.user?.id && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const { title, tags } = req.body;
+    
+    content.title = title;
+    content.tags = tags;
+    await content.save();
+
+    return res.json({ success: true, content });
+  } catch (error) {
+    console.error('Error updating content:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Удаление контента
+router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const content = await ContentModel.findById(req.params.id);
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+
+    // Проверяем, является ли пользователь владельцем контента или админом
+    if (content.authorId.toString() !== req.user?.id && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    // Используем deleteOne() вместо remove()
+    await content.deleteOne();
+    
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting content:', error);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 

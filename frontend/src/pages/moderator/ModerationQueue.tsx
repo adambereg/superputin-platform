@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, Edit2, Trash2 } from 'lucide-react';
 import { EditContentModal } from '../../components/EditContentModal';
+import { api } from '../../api/client';
 
 interface Content {
   _id: string;
@@ -27,15 +28,9 @@ export function ModerationQueue() {
 
   const fetchPendingContent = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/content/pending', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        setContent(data.content);
+      const response = await api.content.getPending();
+      if (response.success) {
+        setContent(response.content);
       }
     } catch (error) {
       setError('Ошибка загрузки контента');
@@ -46,27 +41,17 @@ export function ModerationQueue() {
 
   const handleModerate = async (contentId: string, status: 'approved' | 'rejected') => {
     try {
-      const response = await fetch(`http://localhost:3000/api/content/moderate/${contentId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          status,
-          comment: moderationComment
-        })
+      const response = await api.content.moderate(contentId, {
+        status,
+        comment: moderationComment
       });
       
-      const data = await response.json();
-      
-      if (data.success) {
-        // Обновляем список после успешной модерации
+      if (response.success) {
         setContent(content.filter(item => item._id !== contentId));
         setModerationComment('');
         alert(status === 'approved' ? 'Контент одобрен' : 'Контент отклонен');
       } else {
-        alert(`Ошибка: ${data.error || 'Неизвестная ошибка'}`);
+        alert(`Ошибка: ${response.error || 'Неизвестная ошибка'}`);
       }
     } catch (error) {
       console.error('Ошибка модерации:', error);

@@ -31,10 +31,12 @@ export class StorageService {
     });
   }
 
-  async uploadFile(buffer: Buffer, fileName: string): Promise<string> {
+  async uploadFile(buffer: Buffer, filename: string): Promise<string> {
+    // Реализация загрузки файла
+    // Возвращает URL загруженного файла
     try {
       // Генерируем уникальное имя файла
-      const uniqueFileName = this.generateUniqueFileName(fileName);
+      const uniqueFileName = this.generateUniqueFileName(filename);
       
       // Для локальной разработки сохраняем файл на диск
       if (this.isDevelopment) {
@@ -47,7 +49,7 @@ export class StorageService {
       }
       
       // Для продакшена загружаем в S3/R2
-      const contentType = this.getContentType(fileName);
+      const contentType = this.getContentType(filename);
       
       // Проверяем, что R2_BUCKET определен
       if (!process.env.R2_BUCKET) {
@@ -81,7 +83,7 @@ export class StorageService {
       
       // В случае ошибки с S3/R2, пробуем сохранить локально
       try {
-        const uniqueFileName = this.generateUniqueFileName(fileName);
+        const uniqueFileName = this.generateUniqueFileName(filename);
         const filePath = path.join(this.uploadsDir, uniqueFileName);
         fs.writeFileSync(filePath, buffer);
         

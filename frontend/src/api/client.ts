@@ -250,14 +250,41 @@ export const api = {
       }
     },
 
-    upload: (formData: FormData) =>
-      fetch(`${API_URL}/content/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      }).then(res => res.json()),
+    upload: async (formData: FormData): Promise<ApiResponse<Content>> => {
+      try {
+        console.log('Uploading content with FormData:', {
+          title: formData.get('title'),
+          type: formData.get('type'),
+          filesCount: formData.getAll('files').length
+        });
+        
+        const response = await fetch(`${API_URL}/content/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        });
+        
+        const data = await response.json();
+        console.log('Upload response:', data);
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to upload content');
+        }
+        
+        return {
+          success: true,
+          content: data.content
+        };
+      } catch (error) {
+        console.error('Error uploading content:', error);
+        return {
+          success: false,
+          error: error.message || 'Failed to upload content'
+        };
+      }
+    },
 
     getPending: () => 
       fetch(`${API_URL}/content/pending`, {
@@ -274,9 +301,13 @@ export const api = {
         body: JSON.stringify(data)
       }).then(res => res.json()),
 
-    getByType: async (type: string, page = 1, limit = 12) => {
+    getByType: async (type: string, params: { page?: number; limit?: number; } = {}) => {
       try {
-        const response = await fetch(`${API_URL}/content/type/${type}?page=${page}&limit=${limit}`, {
+        const queryParams = new URLSearchParams();
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.limit) queryParams.append('limit', params.limit.toString());
+        
+        const response = await fetch(`${API_URL}/content/type/${type}?${queryParams}`, {
           headers: getHeaders()
         });
         
@@ -284,21 +315,108 @@ export const api = {
         return data;
       } catch (error) {
         console.error(`Ошибка получения контента типа ${type}:`, error);
-        return { success: false, error: 'Не удалось загрузить контент' };
+        throw error;
+      }
+    },
+
+    getById: async (contentId: string) => {
+      try {
+        const response = await fetch(`${API_URL}/content/${contentId}`, {
+          headers: getHeaders()
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch content');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching content by ID:', error);
+        throw error;
+      }
+    },
+
+    update: async (contentId: string, data: { title: string; tags: string[] }) => {
+      try {
+        const response = await fetch(`${API_URL}/content/${contentId}`, {
+          method: 'PUT',
+          headers: {
+            ...getHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to update content');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error updating content:', error);
+        throw error;
+      }
+    },
+
+    delete: async (contentId: string) => {
+      try {
+        const response = await fetch(`${API_URL}/content/${contentId}`, {
+          method: 'DELETE',
+          headers: getHeaders()
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete content');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error deleting content:', error);
+        throw error;
       }
     }
   },
 
   likes: {
-    like: (contentId: string) =>
-      fetch(`${API_URL}/content/${contentId}/like`, {
-        method: 'POST'
-      }).then(res => res.json()),
+    like: async (contentId: string) => {
+      try {
+        const response = await fetch(`${API_URL}/content/${contentId}/like`, {
+          method: 'POST',
+          headers: getHeaders()
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to like content');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error liking content:', error);
+        throw error;
+      }
+    },
     
     unlike: (contentId: string) =>
       fetch(`${API_URL}/content/${contentId}/unlike`, {
         method: 'POST'
-      }).then(res => res.json())
+      }).then(res => res.json()),
+
+    checkLikeStatus: async (contentId: string) => {
+      try {
+        const response = await fetch(`${API_URL}/content/${contentId}/like-status`, {
+          headers: getHeaders()
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to check like status');
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error checking like status:', error);
+        throw error;
+      }
+    }
   },
 
   notifications: {
