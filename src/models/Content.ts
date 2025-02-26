@@ -26,6 +26,7 @@ export interface Content extends Document {
   moderatedBy?: string;
   moderatedAt?: Date;
   tags: string[]; // Добавляем поле для тегов
+  pages: string[]; // Массив URL страниц для комиксов
 }
 
 const contentSchema = new Schema({
@@ -49,15 +50,14 @@ const contentSchema = new Schema({
     type: String,
     validate: [{
       validator: function(this: mongoose.Document & { type: ContentType }, tag: string) {
-        // Получаем тип контента напрямую из документа
         const contentType = this.type;
-        // Проверяем наличие тега в списке допустимых тегов
         return Array.isArray(CONTENT_TAGS[contentType]) && 
                CONTENT_TAGS[contentType].indexOf(tag) !== -1;
       },
       message: 'Invalid tag for content type'
     }]
-  }]
+  }],
+  pages: [String] // Массив URL страниц для комиксов
 }, {
   timestamps: true
 });

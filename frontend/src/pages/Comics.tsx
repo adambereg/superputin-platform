@@ -30,6 +30,8 @@ export function Comics() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  const categories = ["All", "Action", "Sci-Fi", "Fantasy"];
+
   useEffect(() => {
     fetchComics(currentPage);
   }, [currentPage]);
