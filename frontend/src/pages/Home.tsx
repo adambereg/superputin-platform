@@ -4,6 +4,8 @@ import { Rocket, Image, Coins, Heart, Eye, Wallet, ChevronLeft, ChevronRight, Cl
 import { useUser } from '../contexts/UserContext';
 import { AuthModal } from '../components/AuthModal';
 import { api } from '../api/client';
+import { NFTModal } from '../components/NFTModal';
+import { MemeModal } from '../components/MemeModal';
 
 interface Content {
   _id: string;
@@ -29,6 +31,8 @@ export function Home() {
   const [nfts, setNfts] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedNFT, setSelectedNFT] = useState<Content | null>(null);
+  const [selectedMeme, setSelectedMeme] = useState<Content | null>(null);
 
   const comicsToShow = 3;
   const memesToShow = 4;
@@ -228,7 +232,7 @@ export function Home() {
       </section>
 
       {/* Секция NFT */}
-      <section className="py-16 bg-text/5">
+      <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold">Популярные NFT</h2>
@@ -245,48 +249,37 @@ export function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {loading ? (
                 Array(3).fill(0).map((_, i) => (
-                  <div key={i} className="bg-gray-100 animate-pulse rounded-xl h-96"></div>
+                  <div key={i} className="bg-gray-100 animate-pulse rounded-xl h-64"></div>
                 ))
               ) : nfts.length > 0 ? (
                 nfts.slice(currentNFTSlide, currentNFTSlide + nftsToShow).map((nft) => (
-                  <div key={nft._id} className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                    <Link to={`/nfts/${nft._id}`}>
-                      <img
-                        src={nft.fileUrl}
-                        alt={nft.title}
-                        className="w-full h-48 object-cover"
-                      />
-                    </Link>
+                  <div 
+                    key={nft._id} 
+                    className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => setSelectedNFT(nft)}
+                  >
+                    <img
+                      src={nft.fileUrl}
+                      alt={nft.title}
+                      className="w-full h-64 object-cover"
+                    />
                     <div className="p-4">
-                      <Link to={`/nfts/${nft._id}`} className="block">
-                        <h3 className="text-lg font-semibold mb-2 hover:text-primary transition-colors">{nft.title}</h3>
-                      </Link>
-                      <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-md font-semibold mb-2">{nft.title}</h3>
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1 text-text/70">
-                            <Heart size={18} />
+                            <Heart size={16} />
                             <span>{nft.likesCount || 0}</span>
                           </div>
                           <div className="flex items-center gap-1 text-text/70">
-                            <Eye size={18} />
+                            <Eye size={16} />
                             <span>1K</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 text-text/70">
-                          <Wallet size={18} />
-                          <span>100 TON</span>
+                        <div className="text-primary font-medium">
+                          10 TON
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-text/70">Автор: {nft.authorId?.username || 'Неизвестный'}</p>
-                        <p className="text-primary">{nft.tags?.[0] || 'Art'}</p>
-                      </div>
-                      <Link
-                        to={`/nfts/${nft._id}`}
-                        className="block w-full bg-primary text-white py-2 mt-4 rounded-lg text-center font-medium hover:bg-primary/90 transition-colors"
-                      >
-                        Подробнее
-                      </Link>
                     </div>
                   </div>
                 ))
@@ -319,6 +312,14 @@ export function Home() {
         </div>
       </section>
 
+      {/* Модальное окно NFT */}
+      {selectedNFT && (
+        <NFTModal
+          nft={selectedNFT}
+          onClose={() => setSelectedNFT(null)}
+        />
+      )}
+
       {/* Секция мемов */}
       <section className="py-16">
         <div className="container mx-auto px-4">
@@ -341,18 +342,18 @@ export function Home() {
                 ))
               ) : memes.length > 0 ? (
                 memes.slice(currentMemeSlide, currentMemeSlide + memesToShow).map((meme) => (
-                  <div key={meme._id} className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                    <Link to={`/memes/${meme._id}`}>
-                      <img
-                        src={meme.fileUrl}
-                        alt={meme.title}
-                        className="w-full h-40 object-cover"
-                      />
-                    </Link>
+                  <div 
+                    key={meme._id} 
+                    className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => setSelectedMeme(meme)}
+                  >
+                    <img
+                      src={meme.fileUrl}
+                      alt={meme.title}
+                      className="w-full h-40 object-cover"
+                    />
                     <div className="p-4">
-                      <Link to={`/memes/${meme._id}`} className="block">
-                        <h3 className="text-md font-semibold mb-2 hover:text-primary transition-colors">{meme.title}</h3>
-                      </Link>
+                      <h3 className="text-md font-semibold mb-2">{meme.title}</h3>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="flex items-center gap-1 text-text/70">
@@ -410,6 +411,14 @@ export function Home() {
           </div>
         </div>
       </section>
+
+      {/* Добавьте модальное окно мема */}
+      {selectedMeme && (
+        <MemeModal
+          meme={selectedMeme}
+          onClose={() => setSelectedMeme(null)}
+        />
+      )}
 
       <AuthModal 
         isOpen={isAuthModalOpen}
