@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { User, Settings, FileText, Award, Bell, Shield, LogOut } from 'lucide-react';
+import { User, Settings, FileText, Award, Bell, Shield, LogOut, Edit2 } from 'lucide-react';
 import { useUser } from '../../contexts/UserContext';
 import { api } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import { UploadContentModal } from '../../components/UploadContentModal';
+import { EditContentModal } from '../../components/EditContentModal';
 
 interface UserContent {
   _id: string;
   title: string;
-  type: string;
+  type: 'meme' | 'comic' | 'nft';
   fileUrl: string;
   moderationStatus: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   moderationComment?: string;
+  tags?: string[];
 }
 
 export function UserDashboard() {
@@ -33,6 +35,7 @@ export function UserDashboard() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [editingContent, setEditingContent] = useState<UserContent | null>(null);
 
   useEffect(() => {
     if (activeTab === 'content') {
@@ -132,6 +135,26 @@ export function UserDashboard() {
         return 'Отклонено';
       default:
         return 'На модерации';
+    }
+  };
+
+  const handleUpdateContent = async (contentId: string, data: { title: string; tags: string[] }) => {
+    try {
+      await api.content.update(contentId, data);
+      // Обновляем список контента
+      fetchUserContent();
+    } catch (error) {
+      console.error('Failed to update content:', error);
+    }
+  };
+
+  const handleDeleteContent = async (contentId: string) => {
+    try {
+      await api.content.delete(contentId);
+      // Обновляем список контента
+      fetchUserContent();
+    } catch (error) {
+      console.error('Failed to delete content:', error);
     }
   };
 
@@ -298,39 +321,48 @@ export function UserDashboard() {
                     </div>
                   ) : userContent.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {userContent.map(item => (
-                        <div key={item._id} className="bg-white rounded-lg shadow overflow-hidden">
-                          <div className="aspect-video bg-gray-100">
-                            {item.fileUrl && (
-                              <img 
-                                src={item.fileUrl} 
-                                alt={item.title}
-                                className="w-full h-full object-cover"
-                              />
-                            )}
+                      {userContent.map((item) => (
+                        <div key={item._id} className="relative group">
+                          <div className="bg-white rounded-lg shadow overflow-hidden">
+                            <div className="aspect-video bg-gray-100">
+                              {item.fileUrl && (
+                                <img 
+                                  src={item.fileUrl} 
+                                  alt={item.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </div>
+                            
+                            <div className="p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-semibold text-lg">{item.title}</h3>
+                                <span className={`text-xs px-2 py-1 rounded ${getModerationStatusClass(item.moderationStatus)}`}>
+                                  {getModerationStatusText(item.moderationStatus)}
+                                </span>
+                              </div>
+                              
+                              <div className="text-sm text-gray-500 mb-2">
+                                <span className="capitalize">{item.type}</span>
+                                <span className="mx-2">•</span>
+                                <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              
+                              {item.moderationComment && item.moderationStatus === 'rejected' && (
+                                <div className="mt-2 p-2 bg-red-50 text-red-700 text-sm rounded">
+                                  <p className="font-medium">Комментарий модератора:</p>
+                                  <p>{item.moderationComment}</p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                           
-                          <div className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <h3 className="font-semibold text-lg">{item.title}</h3>
-                              <span className={`text-xs px-2 py-1 rounded ${getModerationStatusClass(item.moderationStatus)}`}>
-                                {getModerationStatusText(item.moderationStatus)}
-                              </span>
-                            </div>
-                            
-                            <div className="text-sm text-gray-500 mb-2">
-                              <span className="capitalize">{item.type}</span>
-                              <span className="mx-2">•</span>
-                              <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                            </div>
-                            
-                            {item.moderationComment && item.moderationStatus === 'rejected' && (
-                              <div className="mt-2 p-2 bg-red-50 text-red-700 text-sm rounded">
-                                <p className="font-medium">Комментарий модератора:</p>
-                                <p>{item.moderationComment}</p>
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            onClick={() => setEditingContent(item)}
+                            className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Edit2 size={16} className="text-gray-600" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -385,6 +417,15 @@ export function UserDashboard() {
         onUpload={handleUpload}
         simplified={false}
       />
+
+      {editingContent && (
+        <EditContentModal
+          content={editingContent}
+          onClose={() => setEditingContent(null)}
+          onUpdate={handleUpdateContent}
+          onDelete={handleDeleteContent}
+        />
+      )}
     </div>
   );
 } 
