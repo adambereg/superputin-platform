@@ -8,15 +8,13 @@ interface UploadContentModalProps {
   onClose: () => void;
   onUpload: (formData: FormData) => Promise<void>;
   defaultType?: ContentType;
-  simplified?: boolean; // Упрощенный режим для модераторов/админов
 }
 
 export function UploadContentModal({ 
   isOpen, 
   onClose, 
   onUpload, 
-  defaultType = 'meme',
-  simplified = false 
+  defaultType = 'meme'
 }: UploadContentModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -25,6 +23,7 @@ export function UploadContentModal({
   const [preview, setPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useUser();
 
   // Сбрасываем форму при открытии/закрытии
@@ -36,10 +35,16 @@ export function UploadContentModal({
       setFile(null);
       setPreview(null);
       setSelectedTags([]);
+      setError(null);
     }
   }, [isOpen, defaultType]);
 
-  // Обновляем превью при выборе файла
+  // Сбрасываем выбранные теги при изменении типа контента
+  useEffect(() => {
+    setSelectedTags([]);
+  }, [type]);
+
+  // Создаем превью при выборе файла
   useEffect(() => {
     if (!file) {
       setPreview(null);
@@ -52,6 +57,47 @@ export function UploadContentModal({
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!file) {
+      setError('Пожалуйста, выберите файл');
+      return;
+    }
+
+    if (!title) {
+      setError('Пожалуйста, введите название');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setError(null);
+      
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('type', type);
+      formData.append('file', file);
+      
+      if (description) {
+        formData.append('description', description);
+      }
+      
+      // Добавляем выбранные теги
+      selectedTags.forEach(tag => {
+        formData.append('tags[]', tag);
+      });
+      
+      await onUpload(formData);
+      onClose();
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError('Ошибка при загрузке файла');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
@@ -59,132 +105,120 @@ export function UploadContentModal({
   };
 
   const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(selectedTags.filter(t => t !== tag));
-    } else {
-      setSelectedTags([...selectedTags, tag]);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file || !title) return;
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('title', title);
-    formData.append('type', type);
-    
-    if (description) {
-      formData.append('description', description);
-    }
-    
-    // Добавляем теги только если они выбраны и не в упрощенном режиме
-    if (!simplified && selectedTags.length > 0) {
-      formData.append('tags', JSON.stringify(selectedTags));
-    } else if (simplified) {
-      // В упрощенном режиме добавляем дефолтный тег в зависимости от типа
-      const defaultTag = type === 'meme' ? 'Trending' : 
-                         type === 'comic' ? 'Action' : 'Art';
-      formData.append('tags', JSON.stringify([defaultTag]));
-    }
-
-    try {
-      setIsUploading(true);
-      await onUpload(formData);
-      onClose();
-    } catch (error) {
-      console.error('Ошибка загрузки:', error);
-    } finally {
-      setIsUploading(false);
-    }
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag) 
+        : [...prev, tag]
+    );
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-auto">
+      <div className="bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold">Загрузка контента</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+          <button 
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
             <X size={20} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
+            <label className="block text-sm font-medium mb-1">Тип контента</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setType('meme')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                  type === 'meme' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                }`}
+              >
+                <Image size={20} />
+                Мем
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('comic')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                  type === 'comic' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                }`}
+              >
+                <FileText size={20} />
+                Комикс
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('nft')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                  type === 'nft' ? 'bg-primary text-white' : 'bg-white text-gray-700'
+                }`}
+              >
+                <Palette size={20} />
+                NFT
+              </button>
+            </div>
+          </div>
+
+          <div>
             <label className="block text-sm font-medium mb-1">Название</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="Введите название"
               required
             />
           </div>
 
-          {!simplified && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Описание</label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
-                rows={3}
-              />
-            </div>
-          )}
-
           <div>
-            <label className="block text-sm font-medium mb-1">Тип контента</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as ContentType)}
-              className="w-full px-3 py-2 border rounded-lg"
-            >
-              <option value="meme">Мем</option>
-              <option value="comic">Комикс</option>
-              <option value="nft">NFT</option>
-            </select>
+            <label className="block text-sm font-medium mb-1">Описание (опционально)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="Введите описание"
+              rows={3}
+            />
           </div>
 
-          {!simplified && (
-            <div>
-              <label className="block text-sm font-medium mb-1">Теги</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {CONTENT_TAGS[type].map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`px-3 py-1 rounded-full text-sm ${
-                      selectedTags.includes(tag)
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium mb-1">
+              <Tag size={16} />
+              Теги
+            </label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {CONTENT_TAGS[type].map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className={`px-3 py-1 text-sm rounded-full ${
+                    selectedTags.includes(tag)
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium mb-1">Файл</label>
-            <input
-              type="file"
-              onChange={handleFileChange}
-              accept="image/png,image/jpeg,image/gif"
-              className="hidden"
-              id="file-upload"
-              required
-            />
-            <label
-              htmlFor="file-upload"
-              className="block w-full px-3 py-2 border border-dashed rounded-lg text-center cursor-pointer hover:bg-gray-50"
-            >
+            <label className="block w-full cursor-pointer border-2 border-dashed border-gray-300 rounded-lg hover:border-primary transition-colors">
+              <input
+                type="file"
+                onChange={handleFileChange}
+                className="hidden"
+                accept="image/jpeg,image/png,image/gif"
+              />
               {preview ? (
                 <div className="flex flex-col items-center">
                   <img src={preview} alt="Preview" className="max-h-40 object-contain mb-2" />
@@ -198,6 +232,10 @@ export function UploadContentModal({
               )}
             </label>
           </div>
+
+          {error && (
+            <div className="text-red-500 text-sm">{error}</div>
+          )}
 
           <button
             type="submit"

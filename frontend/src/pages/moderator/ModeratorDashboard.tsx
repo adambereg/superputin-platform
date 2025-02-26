@@ -60,30 +60,41 @@ export function ModeratorDashboard() {
     }
   };
 
-  const handleUpload = async (formData: FormData): Promise<void> => {
+  const handleUpload = async (formData: FormData) => {
     try {
       setIsUploading(true);
       setUploadError(null);
       
-      const response = await api.content.upload(formData);
+      const xhr = new XMLHttpRequest();
       
-      if (response.success) {
-        setUploadSuccess(true);
-        // Обновляем статистику после успешной загрузки
-        fetchStats();
-        
-        // Сбрасываем форму
-        setTimeout(() => {
-          setUploadSuccess(false);
-          setIsUploadModalOpen(false);
-        }, 2000);
-      } else {
-        setUploadError(response.error || 'Ошибка при загрузке');
-      }
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(progress);
+        }
+      };
+      
+      xhr.onload = () => {
+        if (xhr.status === 201) {
+          setUploadSuccess(true);
+          fetchStats(); // Обновляем статистику
+        } else {
+          setUploadError('Ошибка при загрузке');
+        }
+        setIsUploading(false);
+      };
+      
+      xhr.onerror = () => {
+        setUploadError('Ошибка сети');
+        setIsUploading(false);
+      };
+      
+      xhr.open('POST', 'http://localhost:3000/api/content/upload');
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+      xhr.send(formData);
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError('Произошла ошибка при загрузке файла');
-    } finally {
+      setUploadError('Ошибка при загрузке');
       setIsUploading(false);
     }
   };
@@ -174,7 +185,6 @@ export function ModeratorDashboard() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         onUpload={handleUpload}
-        simplified={true}
       />
     </div>
   );

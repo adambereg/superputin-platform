@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import multer from 'multer';
-import { ContentModel } from '../models/Content';
+import { ContentModel, ContentType } from '../models/Content';
 import { NotificationService } from '../notifications/NotificationService';
 import { requireAuth, requireRole } from '../middleware/authMiddleware';
 import { UserModel } from '../models/User';
@@ -107,67 +107,84 @@ router.get('/pending', requireAuth, requireRole('moderator'), async (req: AuthRe
 });
 
 // Загрузка контента
-router.post(
-  '/upload',
-  requireAuth,
-  upload.single('file'),
-  async (req: AuthRequest, res: Response) => {
-    try {
-      if (!req.user) {
-        return res.status(401).json({ error: 'Пользователь не авторизован' });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({ error: 'Файл не загружен' });
-      }
-
-      const { title, type } = req.body;
-      let tags = req.body.tags;
-
-      // Исправляем обработку тегов
-      if (tags) {
-        // Если теги пришли в виде строки JSON, преобразуем их в массив
-        if (typeof tags === 'string') {
-          try {
-            // Проверяем, является ли строка JSON-массивом
-            if (tags.startsWith('[') && tags.endsWith(']')) {
-              tags = JSON.parse(tags);
-            } else {
-              // Если это одиночный тег, преобразуем его в массив
-              tags = [tags];
-            }
-          } catch (e) {
-            // Если не удалось распарсить JSON, считаем это одиночным тегом
-            tags = [tags];
-          }
-        }
-      } else {
-        tags = [];
-      }
-
-      // Проверяем, что теги соответствуют типу контента
-      const contentService = new ContentService();
-      const fileUrl = await storageService.uploadFile(req.file.buffer, req.file.originalname);
-
-      const content = await contentService.uploadContent(req.user, req.file, type, {
-        title,
-        fileUrl,
-        tags
-      });
-
-      return res.status(201).json({
-        success: true,
-        content
-      });
-    } catch (error) {
-      console.warn('Upload error:', error);
-      return res.status(500).json({
-        error: 'Ошибка загрузки контента',
-        details: error instanceof Error ? error.message : 'Unknown error'
+router.post('/upload', requireAuth, upload.single('file'), async (req: AuthRequest, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'Файл не загружен'
       });
     }
+
+    const { title, type, description } = req.body;
+    let tags = req.body['tags[]'] || [];
+    
+    // Если tags пришел как строка (один тег), преобразуем в массив
+    if (!Array.isArray(tags)) {
+      tags = [tags];
+    }
+    
+    // Проверяем, что тип контента валидный
+    if (!['meme', 'comic', 'nft'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Неверный тип контента'
+      });
+    }
+
+    // Если теги пришли, проверяем их валидность
+    if (tags && tags.length > 0) {
+      // Здесь можно добавить проверку тегов, если нужно
+      console.log('Received tags:', tags);
+    }
+
+    // Загружаем файл в хранилище
+    const fileUrl = await storageService.uploadFile(
+      req.file.buffer,
+      req.file.originalname
+    );
+
+    // Создаем запись о контенте
+    const contentService = new ContentService();
+    const content = await contentService.uploadContent(
+      req.user!,
+      req.file,
+      type as ContentType,
+      {
+        title,
+        fileUrl,
+        tags,
+        description
+      }
+    );
+
+    // Если пользователь модератор или админ, автоматически одобряем контент
+    if (req.user?.role === 'admin' || req.user?.role === 'moderator') {
+      content.moderationStatus = 'approved';
+      content.moderatedBy = req.user.id;
+      content.moderatedAt = new Date();
+      await content.save();
+    }
+
+    return res.status(201).json({
+      success: true,
+      content: {
+        id: content.id,
+        title: content.title,
+        fileUrl: content.fileUrl,
+        type: content.type,
+        tags: content.tags
+      }
+    });
+  } catch (error) {
+    console.error('Upload error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Ошибка при загрузке контента',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
-);
+});
 
 // Получение списка контента
 router.get('/list', async (req, res) => {

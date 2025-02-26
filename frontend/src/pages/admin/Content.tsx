@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../api/client';
-import { Search, Eye, Trash2, AlertCircle, Filter } from 'lucide-react';
+import { Search, Eye, Trash2, AlertCircle, Filter, Upload } from 'lucide-react';
 import { UploadContent } from '../../components/UploadContent';
+import { UploadContentModal } from '../../components/UploadContentModal';
 
 interface Content {
   _id: string;
@@ -35,6 +36,7 @@ export function ContentManagement() {
   const [totalPages, setTotalPages] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
   useEffect(() => {
     fetchContent();
@@ -117,32 +119,38 @@ export function ContentManagement() {
     }
   };
 
+  const handleUpload = async (formData: FormData) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.onload = () => {
+        if (xhr.status === 201) {
+          fetchContent(); // Обновляем список контента
+          setIsUploadModalOpen(false);
+        } else {
+          console.error('Upload failed');
+        }
+      };
+      
+      xhr.open('POST', 'http://localhost:3000/api/content/upload');
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+      xhr.send(formData);
+    } catch (error) {
+      console.error('Upload error:', error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Управление контентом</h1>
-        <div className="flex gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="">Все статусы</option>
-            <option value="pending">На модерации</option>
-            <option value="approved">Одобрено</option>
-            <option value="rejected">Отклонено</option>
-          </select>
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="">Все типы</option>
-            <option value="meme">Мемы</option>
-            <option value="comic">Комиксы</option>
-            <option value="nft">NFT</option>
-          </select>
-        </div>
+        <button
+          onClick={() => setIsUploadModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg"
+        >
+          <Upload size={20} />
+          Загрузить контент
+        </button>
       </div>
 
       <UploadContent onSuccess={fetchContent} />
@@ -256,6 +264,13 @@ export function ContentManagement() {
           </div>
         </>
       )}
+
+      <UploadContentModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUpload={handleUpload}
+        simplified={true} // Упрощенный режим для админов
+      />
     </div>
   );
 } 

@@ -74,35 +74,36 @@ export function UserDashboard() {
       setIsUploading(true);
       setUploadError(null);
       
-      console.log('Uploading content:', {
-        title: formData.get('title'),
-        type: formData.get('type'),
-        tags: formData.get('tags'),
-        file: formData.get('file')
-      });
+      const xhr = new XMLHttpRequest();
       
-      const response = await fetch('http://localhost:3000/api/content/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-      console.log('Upload response:', data);
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(progress);
+        }
+      };
       
-      if (!data.success) {
-        throw new Error(data.error || 'Ошибка загрузки');
-      }
-
-      // Обновляем список контента
-      fetchUserContent();
-      setIsUploadModalOpen(false);
+      xhr.onload = () => {
+        if (xhr.status === 201) {
+          setUploadSuccess(true);
+          fetchUserContent(); // Обновляем список контента
+        } else {
+          setUploadError('Ошибка при загрузке');
+        }
+        setIsUploading(false);
+      };
+      
+      xhr.onerror = () => {
+        setUploadError('Ошибка сети');
+        setIsUploading(false);
+      };
+      
+      xhr.open('POST', 'http://localhost:3000/api/content/upload');
+      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+      xhr.send(formData);
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError(error instanceof Error ? error.message : 'Ошибка загрузки');
-    } finally {
+      setUploadError('Ошибка при загрузке');
       setIsUploading(false);
     }
   };
