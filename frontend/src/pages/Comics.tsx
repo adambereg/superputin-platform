@@ -1,205 +1,191 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, Clock, Star, TrendingUp } from 'lucide-react';
+import { api } from '../api/client';
+import { Pagination } from '../components/Pagination';
 
 interface Comic {
   id: string;
+  _id?: string; // Добавляем для совместимости с API
   title: string;
-  cover: string;
-  author: string;
-  rating: number;
-  episodes: number;
-  views: string;
-  lastUpdated: string;
-  category: string;
+  cover?: string;
+  fileUrl?: string; // Добавляем для совместимости с API
+  author?: string;
+  authorId?: { username: string }; // Добавляем для совместимости с API
+  rating?: number;
+  episodes?: number;
+  views?: string;
+  lastUpdated?: string;
+  category?: string;
+  tags?: string[]; // Добавляем для совместимости с API
+  createdAt?: string; // Добавляем для совместимости с API
+  moderationStatus?: string;
 }
 
-const comics: Comic[] = [
-  {
-    id: "1",
-    title: "SuperPutin: Origins",
-    cover: "https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?w=800&h=1200&q=80",
-    author: "CryptoArtist",
-    rating: 4.8,
-    episodes: 12,
-    views: "45K",
-    lastUpdated: "2h ago",
-    category: "Action"
-  },
-  {
-    id: "2",
-    title: "Digital Revolution",
-    cover: "https://images.unsplash.com/photo-1635863138275-d9b33299680b?w=800&h=1200&q=80",
-    author: "BlockMaster",
-    rating: 4.6,
-    episodes: 8,
-    views: "32K",
-    lastUpdated: "5h ago",
-    category: "Sci-Fi"
-  },
-  {
-    id: "3",
-    title: "Crypto Warriors",
-    cover: "https://images.unsplash.com/photo-1618519764620-7403abdbdfe9?w=800&h=1200&q=80",
-    author: "DigitalDreamer",
-    rating: 4.9,
-    episodes: 15,
-    views: "89K",
-    lastUpdated: "1 day ago",
-    category: "Fantasy"
-  },
-  {
-    id: "4",
-    title: "Blockchain Chronicles",
-    cover: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=800&h=1200&q=80",
-    author: "TechArtist",
-    rating: 4.7,
-    episodes: 6,
-    views: "28K",
-    lastUpdated: "3h ago",
-    category: "Sci-Fi"
-  },
-  {
-    id: "5",
-    title: "Web3 Heroes",
-    cover: "https://images.unsplash.com/photo-1599420186946-7b6fb4e297f0?w=800&h=1200&q=80",
-    author: "CryptoMaster",
-    rating: 4.5,
-    episodes: 10,
-    views: "56K",
-    lastUpdated: "6h ago",
-    category: "Action"
-  },
-  {
-    id: "6",
-    title: "Metaverse Tales",
-    cover: "https://images.unsplash.com/photo-1604537466158-719b1972feb8?w=800&h=1200&q=80",
-    author: "VirtualArtist",
-    rating: 4.4,
-    episodes: 7,
-    views: "41K",
-    lastUpdated: "12h ago",
-    category: "Fantasy"
-  }
-];
-
 export function Comics() {
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState('Popular');
+  const [comics, setComics] = useState<Comic[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  const categories = ['All', 'Action', 'Sci-Fi', 'Fantasy'];
-  const sortOptions = ['Popular', 'Top Rated'];
+  useEffect(() => {
+    fetchComics(currentPage);
+  }, [currentPage]);
 
-  // Фильтруем комиксы по выбранной категории
-  const filteredComics = comics.filter(comic => 
-    selectedCategory === 'All' ? true : comic.category === selectedCategory
-  );
-
-  // Сортируем комиксы
-  const sortedComics = [...filteredComics].sort((a, b) => {
-    if (sortBy === 'Popular') {
-      // Сортировка по просмотрам (убираем 'K' и конвертируем в число)
-      return parseInt(b.views.replace('K', '000')) - parseInt(a.views.replace('K', '000'));
-    } else {
-      // Сортировка по рейтингу
-      return b.rating - a.rating;
+  const fetchComics = async (page = 1) => {
+    try {
+      setLoading(true);
+      const response = await api.content.getByType('comic', page);
+      
+      if (response.success) {
+        // Преобразуем данные в нужный формат
+        const formattedComics = response.content.map((comic: any) => ({
+          id: comic._id,
+          _id: comic._id,
+          title: comic.title,
+          cover: comic.fileUrl,
+          fileUrl: comic.fileUrl,
+          author: comic.authorId?.username || 'Неизвестный автор',
+          authorId: comic.authorId,
+          rating: 4.5, // Временное значение
+          episodes: 10, // Временное значение
+          views: '1K', // Временное значение
+          lastUpdated: new Date(comic.createdAt).toLocaleDateString(),
+          category: comic.tags?.[0] || 'Action',
+          tags: comic.tags,
+          createdAt: comic.createdAt,
+          moderationStatus: comic.moderationStatus
+        }));
+        
+        setComics(formattedComics);
+        setTotalPages(response.pagination.pages);
+        setCurrentPage(response.pagination.page);
+      } else {
+        setError(response.error || 'Не удалось загрузить комиксы');
+      }
+    } catch (error) {
+      setError('Произошла ошибка при загрузке комиксов');
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
-  });
+  };
+
+  // Фильтрация комиксов по категории
+  const filteredComics = activeCategory === 'All' 
+    ? comics 
+    : comics.filter(comic => comic.category === activeCategory || comic.tags?.includes(activeCategory));
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
-      <div className="text-center space-y-2">
-        <h1 className="font-poppins font-bold text-4xl">Comics Gallery</h1>
-        <p className="text-text/70">
-          Explore our collection of exclusive digital comics. New episodes released weekly.
-        </p>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-8">Comics Gallery</h1>
+      
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          onClick={() => setActiveCategory('All')}
+          className={`px-4 py-2 rounded-full ${
+            activeCategory === 'All' ? 'bg-primary text-white' : 'bg-gray-100'
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setActiveCategory('Action')}
+          className={`px-4 py-2 rounded-full ${
+            activeCategory === 'Action' ? 'bg-primary text-white' : 'bg-gray-100'
+          }`}
+        >
+          Action
+        </button>
+        <button
+          onClick={() => setActiveCategory('Sci-Fi')}
+          className={`px-4 py-2 rounded-full ${
+            activeCategory === 'Sci-Fi' ? 'bg-primary text-white' : 'bg-gray-100'
+          }`}
+        >
+          Sci-Fi
+        </button>
+        <button
+          onClick={() => setActiveCategory('Fantasy')}
+          className={`px-4 py-2 rounded-full ${
+            activeCategory === 'Fantasy' ? 'bg-primary text-white' : 'bg-gray-100'
+          }`}
+        >
+          Fantasy
+        </button>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {categories.map(category => (
-            <button
-              key={category}
-              onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                selectedCategory === category
-                  ? 'bg-primary text-white'
-                  : 'bg-text/5 text-text hover:bg-text/10'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {sortOptions.map(option => (
-            <button
-              key={option}
-              onClick={() => setSortBy(option)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                sortBy === option
-                  ? 'bg-primary text-white'
-                  : 'bg-text/5 text-text hover:bg-text/10'
-              }`}
-            >
-              {option === 'Popular' ? <TrendingUp size={18} /> : <Star size={18} />}
-              {option}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {sortedComics.map(comic => (
-          <div
-            key={comic.id}
-            className="bg-background rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all"
-          >
-            <div className="relative aspect-[3/4]">
-              <img
-                src={comic.cover}
-                alt={comic.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-            </div>
-            
-            <div className="p-6 space-y-4">
-              <h3 className="font-poppins font-semibold text-xl">{comic.title}</h3>
-              
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1 text-text/70">
-                    <Star size={18} className="text-yellow-500" />
-                    {comic.rating}
-                  </div>
-                  <div className="flex items-center gap-1 text-text/70">
-                    <Eye size={18} />
-                    {comic.views}
+      {loading ? (
+        <div className="text-center py-12">Загрузка...</div>
+      ) : error ? (
+        <div className="text-center py-12 text-red-500">{error}</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredComics.map((comic) => (
+              <div key={comic.id} className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all">
+                <div className="relative aspect-[2/3]">
+                  <img 
+                    src={comic.cover || comic.fileUrl} 
+                    alt={comic.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 bg-primary text-white px-2 py-1 rounded text-xs">
+                    {comic.category || comic.tags?.[0] || 'Comic'}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 text-text/70">
-                  <Clock size={18} />
-                  {comic.lastUpdated}
+                
+                <div className="p-6 space-y-4">
+                  <h3 className="font-poppins font-semibold text-xl">{comic.title}</h3>
+                  
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1 text-text/70">
+                        <Star size={18} className="text-yellow-500" />
+                        {comic.rating || '4.5'}
+                      </div>
+                      <div className="flex items-center gap-1 text-text/70">
+                        <Eye size={18} />
+                        {comic.views || '1K'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-text/70">
+                      <Clock size={18} />
+                      {comic.lastUpdated || new Date(comic.createdAt || '').toLocaleDateString()}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <p className="text-text/70">Автор: {comic.author || comic.authorId?.username || 'Неизвестный'}</p>
+                    <p className="text-primary">{comic.category || comic.tags?.[0] || 'Comic'}</p>
+                  </div>
+
+                  <Link
+                    to={`/comics/${comic.id}`}
+                    className="block w-full bg-primary text-white py-3 rounded-lg text-center font-medium hover:bg-primary/90 transition-colors"
+                  >
+                    Читать
+                  </Link>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between">
-                <p className="text-text/70">Episodes: {comic.episodes}</p>
-                <p className="text-primary">{comic.category}</p>
-              </div>
-
-              <Link
-                to={`/comics/${comic.id}`}
-                className="block w-full bg-primary text-white py-3 rounded-lg text-center font-medium hover:bg-primary/90 transition-colors"
-              >
-                Read Now
-              </Link>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+          {!loading && comics.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
+      )}
     </div>
   );
 }

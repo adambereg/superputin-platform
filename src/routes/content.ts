@@ -494,4 +494,56 @@ router.get('/:type', async (req, res) => {
   }
 });
 
+// Получение контента по типу с пагинацией
+router.get('/type/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 12;
+    const skip = (page - 1) * limit;
+    
+    // Проверяем, что тип валидный
+    if (!['meme', 'comic', 'nft'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Неверный тип контента'
+      });
+    }
+    
+    // Получаем только одобренный контент с пагинацией
+    const [content, total] = await Promise.all([
+      ContentModel.find({ 
+        type, 
+        moderationStatus: 'approved' 
+      })
+      .populate('authorId', 'username')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+      
+      ContentModel.countDocuments({
+        type,
+        moderationStatus: 'approved'
+      })
+    ]);
+    
+    return res.json({
+      success: true,
+      content,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка получения контента по типу:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Ошибка сервера при получении контента'
+    });
+  }
+});
+
 export default router; 

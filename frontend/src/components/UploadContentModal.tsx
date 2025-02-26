@@ -8,13 +8,15 @@ interface UploadContentModalProps {
   onClose: () => void;
   onUpload: (formData: FormData) => Promise<void>;
   defaultType?: ContentType;
+  simplified?: boolean;
 }
 
 export function UploadContentModal({ 
   isOpen, 
   onClose, 
   onUpload, 
-  defaultType = 'meme'
+  defaultType = 'meme',
+  simplified = false
 }: UploadContentModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

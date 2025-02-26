@@ -272,7 +272,21 @@ export const api = {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(data)
-      }).then(res => res.json())
+      }).then(res => res.json()),
+
+    getByType: async (type: string, page = 1, limit = 12) => {
+      try {
+        const response = await fetch(`${API_URL}/content/type/${type}?page=${page}&limit=${limit}`, {
+          headers: getHeaders()
+        });
+        
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error(`Ошибка получения контента типа ${type}:`, error);
+        return { success: false, error: 'Не удалось загрузить контент' };
+      }
+    }
   },
 
   likes: {
